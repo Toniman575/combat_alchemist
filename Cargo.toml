@@ -28,6 +28,7 @@ bevy = { version = "0.16", default-features = false, features = [
   "webgl2",
   "x11",
 ] }
+bevy_cursor = {version = "0.6", features = ["2d"]}
 bevy_enhanced_input = "0.12"
 bevy-inspector-egui = { version = "0.31", default-features = false, features = [
   "bevy_render",
