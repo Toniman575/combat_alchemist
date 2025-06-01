@@ -10,6 +10,10 @@ use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 #[input_action(output = Vec2)]
 struct Move;
 
+#[derive(Debug, InputAction)]
+#[input_action(output = Vec2)]
+struct Zoom;
+
 #[derive(InputContext)]
 struct InGame;
 
@@ -19,7 +23,15 @@ struct Player;
 fn main() -> AppExit {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Window {
+                    title: String::from("Combat Alchemist"),
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }
+                .into(),
+                ..default()
+            }),
             EnhancedInputPlugin,
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
@@ -31,9 +43,10 @@ fn main() -> AppExit {
         .add_input_context::<InGame>()
         .add_observer(apply_velocity)
         .add_observer(binding)
+        .add_observer(zoom)
         .insert_resource(Gravity::ZERO)
         .add_systems(Startup, startup)
-        .add_systems(Update, kinematic_controller_collisions)
+        .add_systems(Update, (kinematic_controller_collisions, update_camera))
         .register_type::<Player>()
         .run()
 }
@@ -66,6 +79,8 @@ fn binding(trigger: Trigger<Binding<InGame>>, mut players: Query<&mut Actions<In
             SmoothNudge::default(),
             Scale::splat(250.),
         ));
+
+    actions.bind::<Zoom>().to(Input::mouse_wheel());
 }
 
 fn apply_velocity(
@@ -73,6 +88,12 @@ fn apply_velocity(
     mut player: Single<&mut LinearVelocity, With<Player>>,
 ) {
     player.0 = trigger.value;
+}
+
+fn zoom(trigger: Trigger<Fired<Zoom>>, proj: Single<&mut Projection>) {
+    if let Projection::Orthographic(proj) = proj.into_inner().into_inner() {
+        proj.scale -= trigger.value.y * 0.1
+    }
 }
 
 fn kinematic_controller_collisions(
@@ -156,4 +177,17 @@ fn kinematic_controller_collisions(
             }
         }
     }
+}
+
+fn update_camera(
+    mut camera: Single<&mut Transform, (With<Camera2d>, Without<Player>)>,
+    player: Single<&Transform, (With<Player>, Without<Camera2d>)>,
+    time: Res<Time>,
+) {
+    let Vec3 { x, y, .. } = player.translation;
+    let direction = Vec3::new(x, y, camera.translation.z);
+
+    camera
+        .translation
+        .smooth_nudge(&direction, 2., time.delta_secs());
 }

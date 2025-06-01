@@ -1,7 +1,7 @@
 ### Milestone 1
 
     - [x] Character Controller
-    - [ ] Basic Camera
+    - [x] Basic Camera
     - [ ] Training Dummy
     - [ ] Basic Combat (1 "Marker", 1 "Release")
     - [ ] Basic enemy AI
@@ -14,7 +14,7 @@
 
 ### Milestone 3
 
-    - [ ] Add more "Markers" and "Release" Mechnics
+    - [ ] Add more "Markers" and "Release" Mechanics
     - [ ] Add more Enemy Types
     - [ ] Add some kind of Progression other than new enemies spawning
 
