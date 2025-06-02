@@ -28,11 +28,12 @@ bevy = { version = "0.16", default-features = false, features = [
   "webgl2",
   "x11",
 ] }
-bevy_cursor = {version = "0.6", features = ["2d"]}
+bevy_cursor = { version = "0.6", features = ["2d"] }
 bevy_enhanced_input = "0.12"
 bevy-inspector-egui = { version = "0.31", default-features = false, features = [
   "bevy_render",
 ] }
+rand = "0.9"
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
   "max_level_debug",

@@ -1,7 +1,4 @@
-use avian2d::{
-    math::{AdjustPrecision, Scalar},
-    prelude::*,
-};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
@@ -9,6 +6,7 @@ use bevy_inspector_egui::{
     bevy_egui::{EguiContexts, EguiPlugin},
     quick::WorldInspectorPlugin,
 };
+use rand::random;
 
 #[derive(Debug, InputAction)]
 #[input_action(output = Vec2)]
@@ -42,7 +40,15 @@ impl Player {
 
 #[derive(Component, Reflect)]
 #[require(Health(32))]
-struct Enemy;
+struct Enemy {
+    speed: f32,
+}
+
+impl Enemy {
+    fn new(speed: f32) -> Self {
+        Self { speed }
+    }
+}
 
 #[derive(Component, Reflect)]
 struct Mark;
@@ -84,10 +90,7 @@ fn main() -> AppExit {
         .add_observer(apply_mark)
         .insert_resource(Gravity::ZERO)
         .add_systems(Startup, startup)
-        .add_systems(
-            Update,
-            (kinematic_controller_collisions, update_camera, tick_timer),
-        )
+        .add_systems(Update, (update_camera, tick_timer, move_enemies))
         .register_type::<Player>()
         .register_type::<Enemy>()
         .register_type::<SwingTimer>()
@@ -117,20 +120,37 @@ fn startup(mut commands: Commands) {
         Collider::circle(25.),
         TransformExtrapolation,
         Actions::<InGame>::default(),
+        Transform::from_xyz(0., 0., 1.),
     ));
-    commands.spawn((
-        RigidBody::Static,
-        Collider::rectangle(100., 100.),
-        Transform::from_xyz(100., 100., 0.),
-    ));
+
     commands.spawn((
         Name::new("Training Dummy"),
-        Enemy,
+        Enemy::new(150.),
         RigidBody::Kinematic,
         Collider::circle(30.),
         TransformExtrapolation,
-        Transform::from_xyz(-100., -100., 0.),
+        Transform::from_xyz(-100., -100., 1.),
     ));
+
+    let n = 20;
+    let spacing = 50.;
+    let offset = spacing * n as f32 / 2.;
+    let custom_size = Some(Vec2::new(spacing, spacing));
+    for x in 0..n {
+        for y in 0..n {
+            let x = x as f32 * spacing - offset;
+            let y = y as f32 * spacing - offset;
+            let color = Color::hsl(240., random::<f32>() * 0.3, random::<f32>() * 0.3);
+            commands.spawn((
+                Sprite {
+                    color,
+                    custom_size,
+                    ..default()
+                },
+                Transform::from_xyz(x, y, 0.),
+            ));
+        }
+    }
 }
 
 fn binding(trigger: Trigger<Binding<InGame>>, mut players: Query<&mut Actions<InGame>>) {
@@ -225,73 +245,6 @@ fn secondary_attack(
     }
 }
 
-fn kinematic_controller_collisions(
-    collisions: Collisions,
-    collider_rbs: Query<&ColliderOf, Without<Sensor>>,
-    mut character_controllers: Query<(&mut Position, &mut LinearVelocity), With<Player>>,
-    time: Res<Time>,
-) {
-    for contacts in collisions.iter() {
-        let Ok([&ColliderOf { body: rb1 }, &ColliderOf { body: rb2 }]) =
-            collider_rbs.get_many([contacts.collider1, contacts.collider2])
-        else {
-            continue;
-        };
-
-        let is_first: bool;
-
-        let (mut position, mut linear_velocity) =
-            if let Ok(character) = character_controllers.get_mut(rb1) {
-                is_first = true;
-                character
-            } else if let Ok(character) = character_controllers.get_mut(rb2) {
-                is_first = false;
-                character
-            } else {
-                continue;
-            };
-
-        for manifold in contacts.manifolds.iter() {
-            let normal = if is_first {
-                -manifold.normal
-            } else {
-                manifold.normal
-            };
-
-            let mut deepest_penetration: Scalar = Scalar::MIN;
-
-            for contact in manifold.points.iter() {
-                if contact.penetration > 0.0 {
-                    position.0 += normal * contact.penetration;
-                }
-                deepest_penetration = deepest_penetration.max(contact.penetration);
-            }
-
-            if deepest_penetration > 0.0 {
-                if linear_velocity.dot(normal) > 0.0 {
-                    continue;
-                }
-
-                let impulse = linear_velocity.reject_from_normalized(normal);
-                linear_velocity.0 = impulse;
-            } else {
-                let normal_speed = linear_velocity.dot(normal);
-
-                if normal_speed > 0.0 {
-                    continue;
-                }
-
-                let impulse_magnitude =
-                    normal_speed - (deepest_penetration / time.delta_secs_f64().adjust_precision());
-                let mut impulse = impulse_magnitude * normal;
-
-                impulse.y = impulse.y.max(0.0);
-                linear_velocity.0 -= impulse;
-            }
-        }
-    }
-}
-
 fn update_camera(
     mut camera: Single<&mut Transform, (With<Camera2d>, Without<Player>)>,
     player: Single<&Transform, (With<Player>, Without<Camera2d>)>,
@@ -310,5 +263,17 @@ fn tick_timer(mut commands: Commands, timer_q: Query<(Entity, &mut SwingTimer)>,
         if timer.tick(time.delta()).finished() {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn move_enemies(
+    enemy_q: Query<(&mut LinearVelocity, &Transform, &Enemy)>,
+    player: Single<&Transform, With<Player>>,
+) {
+    for (mut vel, enemy_transform, enemy) in enemy_q {
+        let normalized_direction_vec =
+            (player.translation.xy() - enemy_transform.translation.xy()).normalize_or_zero();
+
+        vel.set_if_neq(LinearVelocity(normalized_direction_vec * enemy.speed));
     }
 }
