@@ -28,6 +28,7 @@ struct PrimaryAttack;
 struct SecondaryAttack;
 
 #[derive(Component, Reflect)]
+#[require(Health(100))]
 struct Player {
     speed: f32,
 }
@@ -39,7 +40,7 @@ impl Player {
 }
 
 #[derive(Component, Reflect)]
-#[require(Health(32))]
+#[require(Health(30), Moving)]
 struct Enemy {
     speed: f32,
 }
@@ -50,14 +51,26 @@ impl Enemy {
     }
 }
 
+#[derive(Component, Reflect, Default)]
+struct Moving;
+
 #[derive(Component, Reflect)]
 struct Mark;
 
-#[derive(Component, Reflect, DerefMut, Deref)]
+#[derive(Component, Reflect)]
+struct Attacking {
+    target: Transform,
+    timer: Timer,
+}
+
+#[derive(Component, Reflect)]
+struct Dead;
+
+#[derive(Component, Reflect)]
 struct Health(i32);
 
 #[derive(Component, Reflect, DerefMut, Deref)]
-struct SwingTimer(Timer);
+struct HitBoxTimer(Timer);
 
 fn main() -> AppExit {
     App::new()
@@ -88,27 +101,49 @@ fn main() -> AppExit {
         .add_observer(primary_attack)
         .add_observer(secondary_attack)
         .add_observer(apply_mark)
+        .add_observer(enemy_attack)
         .insert_resource(Gravity::ZERO)
         .add_systems(Startup, startup)
-        .add_systems(Update, (update_camera, tick_timer, move_enemies))
+        .add_systems(
+            Update,
+            (
+                update_camera,
+                tick_hitbox_timer,
+                tick_attack_timer,
+                move_enemies,
+                check_health,
+            ),
+        )
         .register_type::<Player>()
         .register_type::<Enemy>()
-        .register_type::<SwingTimer>()
+        .register_type::<HitBoxTimer>()
+        .register_type::<Attacking>()
         .register_type::<Mark>()
         .register_type::<Health>()
+        .register_type::<Attacking>()
+        .register_type::<Dead>()
         .run()
 }
 
 fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
     mut commands: Commands,
-    enemy_q: Query<Entity, (With<Enemy>, Without<Mark>)>,
+    enemy_q: Query<Entity, (With<Enemy>, Without<Mark>, Without<Dead>)>,
 ) {
     let Ok(enemy_entity) = enemy_q.get(trigger.collider) else {
         return;
     };
 
     commands.entity(enemy_entity).insert(Mark);
+}
+
+fn enemy_attack(
+    trigger: Trigger<OnCollisionStart>,
+    mut player: Single<(Entity, &mut Health), With<Player>>,
+) {
+    if player.0 == (trigger.collider) {
+        player.1.0 -= 10;
+    }
 }
 
 fn startup(mut commands: Commands) {
@@ -214,12 +249,9 @@ fn primary_attack(
     let player_transform = transform_q.get(trigger.target()).unwrap();
     let player_pos = player_transform.translation.xy();
     let direction_vector = cursor_pos - player_pos;
-    let length = direction_vector.length_squared();
 
-    if length == 0. {
-        return;
-    }
-    let normalized_direction_vector = direction_vector.normalize();
+    let normalized_direction_vector = direction_vector.normalize_or_zero();
+
     let new_point = normalized_direction_vector * 100.;
     let mut new_transform = Transform::from_translation(new_point.extend(0.));
     new_transform.rotation =
@@ -230,7 +262,7 @@ fn primary_attack(
         Sensor,
         new_transform,
         CollisionEventsEnabled,
-        SwingTimer(Timer::from_seconds(0.1, TimerMode::Once)),
+        HitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
     ));
 }
 
@@ -258,7 +290,11 @@ fn update_camera(
         .smooth_nudge(&direction, 2., time.delta_secs());
 }
 
-fn tick_timer(mut commands: Commands, timer_q: Query<(Entity, &mut SwingTimer)>, time: Res<Time>) {
+fn tick_hitbox_timer(
+    mut commands: Commands,
+    timer_q: Query<(Entity, &mut HitBoxTimer)>,
+    time: Res<Time>,
+) {
     for (entity, mut timer) in timer_q {
         if timer.tick(time.delta()).finished() {
             commands.entity(entity).despawn();
@@ -266,14 +302,62 @@ fn tick_timer(mut commands: Commands, timer_q: Query<(Entity, &mut SwingTimer)>,
     }
 }
 
+fn tick_attack_timer(
+    mut commands: Commands,
+    attacking_q: Query<(Entity, &mut Attacking)>,
+    time: Res<Time>,
+) {
+    for (entity, mut attacking) in attacking_q {
+        if attacking.timer.tick(time.delta()).finished() {
+            commands.entity(entity).remove::<Attacking>().with_child((
+                Collider::rectangle(5., 50.),
+                Sensor,
+                attacking.target,
+                CollisionEventsEnabled,
+                HitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
+            ));
+            commands.entity(entity).insert(Moving);
+        }
+    }
+}
+
 fn move_enemies(
-    enemy_q: Query<(&mut LinearVelocity, &Transform, &Enemy)>,
+    mut commands: Commands,
+    enemy_q: Query<
+        (Entity, &mut LinearVelocity, &Transform, &Enemy),
+        (With<Moving>, Without<Dead>),
+    >,
     player: Single<&Transform, With<Player>>,
 ) {
-    for (mut vel, enemy_transform, enemy) in enemy_q {
-        let normalized_direction_vec =
+    for (enemy_entity, mut vel, enemy_transform, enemy) in enemy_q {
+        let normalized_direction_vector =
             (player.translation.xy() - enemy_transform.translation.xy()).normalize_or_zero();
 
-        vel.set_if_neq(LinearVelocity(normalized_direction_vec * enemy.speed));
+        if enemy_transform.translation.distance(player.translation) < 100. {
+            let mut new_transform =
+                Transform::from_translation((normalized_direction_vector * 80.).extend(0.));
+            new_transform.rotation =
+                Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
+
+            commands
+                .entity(enemy_entity)
+                .remove::<Moving>()
+                .insert(Attacking {
+                    target: new_transform,
+                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                });
+            vel.set_if_neq(LinearVelocity::ZERO);
+            continue;
+        }
+
+        vel.set_if_neq(LinearVelocity(normalized_direction_vector * enemy.speed));
+    }
+}
+
+fn check_health(mut commands: Commands, health_q: Query<(Entity, &Health)>) {
+    for (entity, health) in health_q {
+        if health.0 < 0 {
+            commands.entity(entity).despawn();
+        }
     }
 }

@@ -34,6 +34,7 @@ bevy-inspector-egui = { version = "0.31", default-features = false, features = [
   "bevy_render",
 ] }
 rand = "0.9"
+getrandom = { version = "0.3", features = ["wasm_js"] }
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
   "max_level_debug",

@@ -3,7 +3,7 @@
     - [x] Character Controller
     - [x] Basic Camera
     - [x] Basic Combat (1 "Marker", 1 "Release")
-    - [ ] Basic enemy AI
+    - [x] Basic enemy AI
     - [ ] Enemy Respawns
 
 ### Milestone 2
