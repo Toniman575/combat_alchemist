@@ -40,7 +40,15 @@ impl Player {
 }
 
 #[derive(Component, Reflect)]
-#[require(Health(30), Moving)]
+#[require(
+    Health(30),
+    Moving,
+    RigidBody::Kinematic,
+    Collider::circle(30.),
+    TransformExtrapolation,
+    Transform,
+    Name
+)]
 struct Enemy {
     speed: f32,
 }
@@ -64,13 +72,13 @@ struct Attacking {
 }
 
 #[derive(Component, Reflect)]
-struct Dead;
-
-#[derive(Component, Reflect)]
 struct Health(i32);
 
 #[derive(Component, Reflect, DerefMut, Deref)]
 struct HitBoxTimer(Timer);
+
+#[derive(Resource, Reflect, DerefMut, Deref)]
+struct SpawnTimer(Timer);
 
 fn main() -> AppExit {
     App::new()
@@ -103,6 +111,7 @@ fn main() -> AppExit {
         .add_observer(apply_mark)
         .add_observer(enemy_attack)
         .insert_resource(Gravity::ZERO)
+        .insert_resource(SpawnTimer(Timer::from_seconds(10., TimerMode::Repeating)))
         .add_systems(Startup, startup)
         .add_systems(
             Update,
@@ -112,6 +121,7 @@ fn main() -> AppExit {
                 tick_attack_timer,
                 move_enemies,
                 check_health,
+                spawn_enemies,
             ),
         )
         .register_type::<Player>()
@@ -121,14 +131,13 @@ fn main() -> AppExit {
         .register_type::<Mark>()
         .register_type::<Health>()
         .register_type::<Attacking>()
-        .register_type::<Dead>()
         .run()
 }
 
 fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
     mut commands: Commands,
-    enemy_q: Query<Entity, (With<Enemy>, Without<Mark>, Without<Dead>)>,
+    enemy_q: Query<Entity, (With<Enemy>, Without<Mark>)>,
 ) {
     let Ok(enemy_entity) = enemy_q.get(trigger.collider) else {
         return;
@@ -161,9 +170,6 @@ fn startup(mut commands: Commands) {
     commands.spawn((
         Name::new("Training Dummy"),
         Enemy::new(150.),
-        RigidBody::Kinematic,
-        Collider::circle(30.),
-        TransformExtrapolation,
         Transform::from_xyz(-100., -100., 1.),
     ));
 
@@ -325,7 +331,7 @@ fn move_enemies(
     mut commands: Commands,
     enemy_q: Query<
         (Entity, &mut LinearVelocity, &Transform, &Enemy),
-        (With<Moving>, Without<Dead>),
+        With<Moving>,
     >,
     player: Single<&Transform, With<Player>>,
 ) {
@@ -359,5 +365,15 @@ fn check_health(mut commands: Commands, health_q: Query<(Entity, &Health)>) {
         if health.0 < 0 {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn spawn_enemies(mut commands: Commands, mut timer: ResMut<SpawnTimer>, time: Res<Time>) {
+    if timer.tick(time.delta()).finished() {
+        commands.spawn((
+            Name::new("Training Dummy"),
+            Enemy::new(150.),
+            Transform::from_xyz(-100., -100., 1.),
+        ));
     }
 }

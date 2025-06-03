@@ -4,7 +4,7 @@
     - [x] Basic Camera
     - [x] Basic Combat (1 "Marker", 1 "Release")
     - [x] Basic enemy AI
-    - [ ] Enemy Respawns
+    - [x] Enemy Respawns
 
 ### Milestone 2
 
