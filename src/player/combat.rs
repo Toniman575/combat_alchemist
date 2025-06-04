@@ -4,7 +4,7 @@ use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    GameLayer, Health, HitBoxTimer,
+    AttackHitBoxTimer, GameLayer, Health,
     enemy::Enemy,
     player::input::{PrimaryAttack, SecondaryAttack},
 };
@@ -49,8 +49,8 @@ pub(super) fn primary_attack(
         Sensor,
         new_transform,
         CollisionEventsEnabled,
-        HitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
-        CollisionLayers::new(GameLayer::Player, GameLayer::Enemy),
+        AttackHitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
+        CollisionLayers::new(GameLayer::PlayerAttack, GameLayer::Enemy),
     ));
 }
 

@@ -54,7 +54,10 @@ impl Player {
     fn bundle(speed: f32) -> impl Bundle {
         (
             Self { speed },
-            CollisionLayers::new(GameLayer::Player, GameLayer::Enemy),
+            CollisionLayers::new(
+                GameLayer::Player,
+                [GameLayer::Enemy, GameLayer::EnemyAttack],
+            ),
         )
     }
 }

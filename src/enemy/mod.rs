@@ -41,7 +41,10 @@ impl Enemy {
         (
             Self { speed },
             Health(health),
-            CollisionLayers::new(GameLayer::Enemy, GameLayer::Player),
+            CollisionLayers::new(
+                GameLayer::Enemy,
+                [[GameLayer::Enemy, GameLayer::Player, GameLayer::PlayerAttack]],
+            ),
             Collider::circle(collider_size),
             Name::new(name),
             Transform::from_translation(pos.extend(1.)),
