@@ -1,15 +1,17 @@
-use avian2d::prelude::*;
-use bevy::prelude::*;
+use std::time::Duration;
 
-use crate::{Attacking, GameLayer, Health, player::Player};
+use avian2d::prelude::*;
+use bevy::{prelude::*, time::Stopwatch};
+
+use crate::{Attacking, GameLayer, Health, Moving, player::Player};
 
 pub(super) struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(enemy_attack)
-            .add_systems(Update, (move_enemies, spawn_enemies))
             .add_systems(Startup, startup)
+            .add_systems(Update, (move_enemies, spawn_enemies))
             .insert_resource(SpawnTimer(Timer::from_seconds(10., TimerMode::Repeating)));
 
         #[cfg(debug_assertions)]
@@ -19,9 +21,6 @@ impl Plugin for EnemyPlugin {
 
 #[derive(Resource, Reflect, DerefMut, Deref)]
 struct SpawnTimer(Timer);
-
-#[derive(Component, Reflect, Default)]
-pub struct Moving;
 
 #[derive(Component, Reflect)]
 #[require(
@@ -73,7 +72,10 @@ fn enemy_attack(
 
 fn move_enemies(
     mut commands: Commands,
-    enemy_q: Query<(Entity, &mut LinearVelocity, &Transform, &Enemy), With<Moving>>,
+    enemy_q: Query<
+        (Entity, &mut LinearVelocity, &Transform, &Enemy),
+        (With<Moving>, Without<Attacking>),
+    >,
     player: Single<&Transform, With<Player>>,
 ) {
     for (enemy_entity, mut vel, enemy_transform, enemy) in enemy_q {
@@ -90,10 +92,17 @@ fn move_enemies(
                 .entity(enemy_entity)
                 .remove::<Moving>()
                 .insert(Attacking {
-                    target: new_transform,
-                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                    target: normalized_direction_vector,
+                    rooted: Duration::from_secs_f32(0.5),
+                    spawn_hitbox: Duration::from_secs_f32(0.4),
+                    stopwatch: Stopwatch::new(),
+                    range: 80.,
+                    hitbox: Collider::rectangle(5., 50.),
+                    hitbox_duration: Duration::from_secs_f32(0.1),
+                    movement: None,
                 });
             vel.set_if_neq(LinearVelocity::ZERO);
+
             continue;
         }
 

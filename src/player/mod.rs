@@ -8,7 +8,7 @@ mod input;
 mod movement;
 
 use crate::{
-    GameLayer, Health, InGame,
+    GameLayer, Health, InGame, Moving,
     player::{
         combat::{apply_mark, primary_attack, secondary_attack},
         input::binding,
@@ -45,6 +45,7 @@ impl Plugin for PlayerPlugin {
     TransformExtrapolation,
     Actions::<InGame>,
     Transform::from_xyz(0., 0., 1.),
+    Moving,
 )]
 pub struct Player {
     speed: f32,

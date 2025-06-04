@@ -12,6 +12,7 @@
     - [ ] Add more "Markers" and "Release" Mechanics
     - [ ] Add more Enemy Types
     - [ ] Add some kind of Progression other than new enemies spawning
+    - [ ] Ingame tutorial
 
 ### Milestone 3
 

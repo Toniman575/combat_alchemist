@@ -1,1 +1,3 @@
-- Generalize Hitbox behaviour.
+- Add `Attacking` in an observer or in a system through an event so both enemy and Player use the same.
+- Refine player attack movement and attack hitboxes. Look at bevy_tween and bevy_lookup_curve.
+- Refactor main.rs.

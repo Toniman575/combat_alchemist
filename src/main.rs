@@ -2,11 +2,13 @@ mod camera;
 mod enemy;
 mod player;
 
+use std::time::Duration;
+
 use avian2d::{
     math::{AdjustPrecision, Scalar},
     prelude::*,
 };
-use bevy::{asset::AssetMetaCheck, prelude::*};
+use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch};
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 use rand::random;
@@ -16,17 +18,26 @@ use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 
 use crate::{
     camera::CameraPlugin,
-    enemy::{EnemyPlugin, Moving},
-    player::PlayerPlugin,
+    enemy::{Enemy, EnemyPlugin},
+    player::{Player, PlayerPlugin},
 };
 
 #[derive(InputContext)]
 struct InGame;
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Default)]
+pub struct Moving;
+
+#[derive(Component)]
 struct Attacking {
-    target: Transform,
-    timer: Timer,
+    hitbox: Collider,
+    hitbox_duration: Duration,
+    movement: Option<Vec2>,
+    range: f32,
+    rooted: Duration,
+    spawn_hitbox: Duration,
+    stopwatch: Stopwatch,
+    target: Vec2,
 }
 
 #[derive(Component, Reflect)]
@@ -40,9 +51,19 @@ enum GameLayer {
     #[default]
     Default,
     Enemy,
-    Player,
     EnemyAttack,
+    Player,
     PlayerAttack,
+}
+
+impl GameLayer {
+    fn enemy_attack() -> CollisionLayers {
+        CollisionLayers::new(GameLayer::EnemyAttack, GameLayer::Player)
+    }
+
+    fn player_attack() -> CollisionLayers {
+        CollisionLayers::new(GameLayer::PlayerAttack, GameLayer::Enemy)
+    }
 }
 
 fn main() -> AppExit {
@@ -76,9 +97,10 @@ fn main() -> AppExit {
         Update,
         (
             tick_hitbox_timer,
-            tick_attack_timer,
             check_health,
             kinematic_collisions,
+            tick_attack_timer,
+            attacking_movement,
         ),
     );
 
@@ -90,7 +112,6 @@ fn main() -> AppExit {
         WorldInspectorPlugin::new(),
     ))
     .register_type::<AttackHitBoxTimer>()
-    .register_type::<Attacking>()
     .register_type::<Health>();
 
     app.run()
@@ -139,31 +160,65 @@ fn tick_hitbox_timer(
     }
 }
 
-fn tick_attack_timer(
-    mut commands: Commands,
-    attacking_q: Query<(Entity, &mut Attacking)>,
-    time: Res<Time>,
-) {
-    for (entity, mut attacking) in attacking_q {
-        if attacking.timer.tick(time.delta()).finished() {
-            commands.entity(entity).remove::<Attacking>().with_child((
-                Collider::rectangle(5., 50.),
-                Sensor,
-                attacking.target,
-                CollisionEventsEnabled,
-                AttackHitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
-                CollisionLayers::new(GameLayer::EnemyAttack, GameLayer::Player),
-            ));
-            commands.entity(entity).insert(Moving);
-        }
-    }
-}
-
 fn check_health(mut commands: Commands, health_q: Query<(Entity, &Health)>) {
     for (entity, health) in health_q {
         if health.0 < 0 {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn tick_attack_timer(
+    mut commands: Commands,
+    attacking_q: Query<(Entity, &mut Attacking, Has<Enemy>, Has<Player>)>,
+    time: Res<Time>,
+) {
+    for (entity, mut attacking, is_enemy, is_player) in attacking_q {
+        attacking.stopwatch.tick(time.delta());
+
+        if attacking.spawn_hitbox <= attacking.stopwatch.elapsed() {
+            let layer = if is_enemy {
+                GameLayer::enemy_attack()
+            } else if is_player {
+                GameLayer::player_attack()
+            } else if is_enemy && is_player {
+                panic!("Entity is player and enemy?")
+            } else {
+                panic!("Entity is neither player nor enemy?")
+            };
+
+            let mut new_transform =
+                Transform::from_translation((attacking.target * attacking.range).extend(2.));
+
+            new_transform.rotation = Quat::from_rotation_arc(Vec3::Y, attacking.target.extend(0.));
+
+            commands.entity(entity).with_child((
+                attacking.hitbox.clone(),
+                Sensor,
+                new_transform,
+                CollisionEventsEnabled,
+                AttackHitBoxTimer(Timer::new(attacking.hitbox_duration, TimerMode::Once)),
+                layer,
+            ));
+        }
+
+        if attacking.rooted <= attacking.stopwatch.elapsed() {
+            commands.entity(entity).remove::<Attacking>().insert(Moving);
+        }
+    }
+}
+
+fn attacking_movement(vel_q: Query<(&mut LinearVelocity, &Attacking)>) {
+    for (mut lin_vel, attacking) in vel_q {
+        let Some(movement) = attacking.movement else {
+            lin_vel.set_if_neq(LinearVelocity::ZERO);
+            continue;
+        };
+
+        let t = (attacking.stopwatch.elapsed_secs() / attacking.rooted.as_secs_f32()).clamp(0., 1.);
+        lin_vel.set_if_neq(LinearVelocity(
+            movement.lerp(Vec2::ZERO, EaseFunction::QuarticOut.sample(t).unwrap()) * 250.,
+        ));
     }
 }
 

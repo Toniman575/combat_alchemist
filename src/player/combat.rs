@@ -1,12 +1,17 @@
+use std::time::Duration;
+
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, time::Stopwatch};
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    AttackHitBoxTimer, GameLayer, Health,
+    Attacking, Health, InGame, Moving,
     enemy::Enemy,
-    player::input::{PrimaryAttack, SecondaryAttack},
+    player::{
+        Player,
+        input::{MovePlayer, PrimaryAttack, SecondaryAttack},
+    },
 };
 
 #[derive(Component, Reflect)]
@@ -25,33 +30,34 @@ pub(super) fn apply_mark(
 }
 
 pub(super) fn primary_attack(
-    trigger: Trigger<Fired<PrimaryAttack>>,
+    _: Trigger<Fired<PrimaryAttack>>,
     cursor_pos: Res<CursorLocation>,
-    transform_q: Query<&Transform>,
+    player: Single<(Entity, &Transform, &Actions<InGame>), (With<Player>, Without<Attacking>)>,
     mut commands: Commands,
 ) {
     let Some(cursor_pos) = cursor_pos.world_position() else {
         return;
     };
-    let player_transform = transform_q.get(trigger.target()).unwrap();
+    let (player_entity, player_transform, current_movement) = player.into_inner();
     let player_pos = player_transform.translation.xy();
     let direction_vector = cursor_pos - player_pos;
 
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 
-    let new_point = normalized_direction_vector * 100.;
-    let mut new_transform = Transform::from_translation(new_point.extend(0.));
-    new_transform.rotation =
-        Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
-
-    commands.entity(trigger.target()).with_child((
-        Collider::rectangle(5., 50.),
-        Sensor,
-        new_transform,
-        CollisionEventsEnabled,
-        AttackHitBoxTimer(Timer::from_seconds(0.1, TimerMode::Once)),
-        CollisionLayers::new(GameLayer::PlayerAttack, GameLayer::Enemy),
-    ));
+    let axis2d = current_movement.value::<MovePlayer>().unwrap().as_axis2d();
+    commands
+        .entity(player_entity)
+        .remove::<Moving>()
+        .insert(Attacking {
+            target: normalized_direction_vector,
+            rooted: Duration::from_secs_f32(0.35),
+            spawn_hitbox: Duration::from_secs_f32(0.25),
+            stopwatch: Stopwatch::new(),
+            range: 100.,
+            hitbox: Collider::rectangle(5., 50.),
+            hitbox_duration: Duration::from_secs_f32(0.1),
+            movement: Some(axis2d),
+        });
 }
 
 pub(super) fn secondary_attack(
