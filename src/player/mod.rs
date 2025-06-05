@@ -8,16 +8,16 @@ use bevy::{color::palettes::css::RED, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    GameLayer, Health, HealthBar, InGame, Moving,
+    GameCollisionLayer, Health, HealthBar, InGame, Moving,
     player::{
-        combat::{apply_mark, primary_attack, secondary_attack},
-        input::binding,
+        combat::{apply_mark, primary_attack, secondary_attack, trigger_mark},
+        input::{add_mouseover, binding, remove_mouseover},
         movement::{apply_velocity, stop_velocity},
     },
 };
 
 #[cfg(debug_assertions)]
-use crate::player::combat::Mark;
+use crate::player::{combat::Mark, input::Mouseover};
 
 pub(super) struct PlayerPlugin;
 
@@ -29,10 +29,15 @@ impl Plugin for PlayerPlugin {
             .add_observer(primary_attack)
             .add_observer(secondary_attack)
             .add_observer(apply_mark)
+            .add_observer(add_mouseover)
+            .add_observer(remove_mouseover)
+            .add_observer(trigger_mark)
             .add_systems(Startup, startup);
 
         #[cfg(debug_assertions)]
-        app.register_type::<Player>().register_type::<Mark>();
+        app.register_type::<Player>()
+            .register_type::<Mark>()
+            .register_type::<Mouseover>();
     }
 }
 
@@ -60,17 +65,17 @@ impl Player {
         (
             Self { speed },
             CollisionLayers::new(
-                GameLayer::Player,
-                [GameLayer::Enemy, GameLayer::EnemyAttack],
+                GameCollisionLayer::Player,
+                [GameCollisionLayer::Enemy, GameCollisionLayer::EnemyAttack],
             ),
-            children![
-(                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
+            children![(
+                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
                 MeshMaterial2d(materials.add(Color::from(RED))),
                 Transform::from_translation(Vec3::new(0., 50., 1.)),
                 HealthBar,
                 Name::new("Healthbar"),
-                Visibility::Visible,)
-            ],
+                Visibility::Visible,
+            )],
         )
     }
 }

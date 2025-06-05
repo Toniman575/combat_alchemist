@@ -8,13 +8,17 @@
 
 ### Milestone 2
 
-    - [ ] Refine combat and player Feedback
+    - [x] Healthbars
+    - [x] Refine combat
     - [ ] Basic Sprites
-    - [ ] Animations
+    - [ ] Weapon Animations
     - [ ] Basic Sound
+    - [ ] Mobile controls
+    - [ ] itch.io workflow for playtesting
 
 ### Milestone 3
 
+    - [ ] Iterate on basic combat loop to make it feel good.
     - [ ] Add more "Markers" and "Release" Mechanics
     - [ ] Add more Enemy Types
     - [ ] Add some kind of Progression other than new enemies spawning

@@ -1,21 +1,24 @@
 use std::time::Duration;
 
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::Stopwatch};
+use bevy::{platform::collections::HashSet, prelude::*, time::Stopwatch};
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    Attacking, Health, InGame, Moving,
-    enemy::Enemy,
+    Attacking, GameCollisionLayer, Health, InGame, Moving,
+    enemy::{Enemy, FollowedBy, Following},
     player::{
-        Player,
+        Mouseover, Player,
         input::{MovePlayer, PrimaryAttack, SecondaryAttack},
     },
 };
 
 #[derive(Component, Reflect)]
 pub(super) struct Mark;
+
+#[derive(Event)]
+pub(super) struct TriggerMark(HashSet<Entity>);
 
 pub(super) fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
@@ -27,6 +30,16 @@ pub(super) fn apply_mark(
     };
 
     commands.entity(enemy_entity).insert(Mark);
+
+    commands.spawn((
+        Collider::circle(100.),
+        Sensor,
+        GameCollisionLayer::mark(),
+        Transform::from_xyz(0., 0., 0.),
+        Following::new(enemy_entity),
+        Pickable::IGNORE,
+        CollidingEntities::default(),
+    ));
 }
 
 pub(super) fn primary_attack(
@@ -62,11 +75,49 @@ pub(super) fn primary_attack(
 
 pub(super) fn secondary_attack(
     _: Trigger<Fired<SecondaryAttack>>,
-    mark_q: Query<(Entity, &mut Health), (With<Mark>, With<Enemy>)>,
+    mark_q: Query<&FollowedBy, (With<Mark>, With<Enemy>, With<Mouseover>)>,
     mut commands: Commands,
 ) {
-    for (entity, mut health) in mark_q {
-        health.current -= 10;
-        commands.entity(entity).remove::<Mark>();
+    for followed_by in mark_q {
+        for following_entity in followed_by.iter() {
+            let mut entities = HashSet::new();
+            entities.insert(following_entity);
+            commands
+                .entity(following_entity)
+                .trigger(TriggerMark(entities));
+        }
     }
+}
+
+pub(super) fn trigger_mark(
+    trigger: Trigger<TriggerMark>,
+    mut colliding_entities: Query<&mut CollidingEntities>,
+    colliders: Query<(Entity, &Following), With<Sensor>>,
+    mut query_mark: Query<&mut Health, With<Mark>>,
+    mut commands: Commands,
+) {
+    let trigger_entity = trigger.target();
+    let trigger_entity_following = colliders.get(trigger_entity).unwrap().1.following();
+    let mut binding = colliding_entities.get_mut(trigger_entity).unwrap();
+    let mut already_triggered_entities = trigger.0.clone();
+    let mut entities_being_triggered_now = binding.clone();
+    already_triggered_entities.extend(entities_being_triggered_now.drain());
+
+    for colliding_entity in binding.drain() {
+        if trigger.0.contains(&colliding_entity) {
+            continue;
+        }
+
+        let (collider_entity, _) = colliders.get(colliding_entity).unwrap();
+        commands
+            .entity(collider_entity)
+            .trigger(TriggerMark(already_triggered_entities.clone()));
+    }
+
+    commands.entity(trigger_entity_following).remove::<Mark>();
+    query_mark
+        .get_mut(trigger_entity_following)
+        .unwrap()
+        .current -= 10;
+    commands.entity(trigger_entity).despawn();
 }

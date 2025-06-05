@@ -3,7 +3,7 @@ use std::time::Duration;
 use avian2d::prelude::*;
 use bevy::{color::palettes::css::RED, prelude::*, time::Stopwatch};
 
-use crate::{Attacking, GameLayer, Health, HealthBar, Moving, player::Player};
+use crate::{Attacking, GameCollisionLayer, Health, HealthBar, Moving, player::Player};
 
 pub(super) struct EnemyPlugin;
 
@@ -11,7 +11,7 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(enemy_attack)
             .add_systems(Startup, startup)
-            .add_systems(Update, (move_enemies, spawn_enemies))
+            .add_systems(Update, (move_enemies, spawn_enemies, move_followers))
             .insert_resource(SpawnTimer(Timer::from_seconds(10., TimerMode::Repeating)));
 
         #[cfg(debug_assertions)]
@@ -28,7 +28,7 @@ struct SpawnTimer(Timer);
     RigidBody::Kinematic,
     Collider::circle(30.),
     TransformExtrapolation,
-    CollisionLayers::new(GameLayer::Enemy, GameLayer::Player)
+    CollisionLayers::new(GameCollisionLayer::Enemy, GameCollisionLayer::Player)
 )]
 pub struct Enemy {
     speed: f32,
@@ -51,8 +51,12 @@ impl Enemy {
                 max: health,
             },
             CollisionLayers::new(
-                GameLayer::Enemy,
-                [[GameLayer::Enemy, GameLayer::Player, GameLayer::PlayerAttack]],
+                GameCollisionLayer::Enemy,
+                [[
+                    GameCollisionLayer::Enemy,
+                    GameCollisionLayer::Player,
+                    GameCollisionLayer::PlayerAttack,
+                ]],
             ),
             Collider::circle(collider_size),
             Name::new(name),
@@ -68,6 +72,23 @@ impl Enemy {
         )
     }
 }
+
+#[derive(Component, Debug)]
+#[relationship(relationship_target = FollowedBy)]
+pub(super) struct Following(Entity);
+
+impl Following {
+    pub(super) fn following(&self) -> Entity {
+        self.0
+    }
+    pub(super) fn new(entity: Entity) -> Self {
+        Self(entity)
+    }
+}
+
+#[derive(Component, Debug)]
+#[relationship_target(relationship = Following)]
+pub(super) struct FollowedBy(Vec<Entity>);
 
 fn startup(
     mut commands: Commands,
@@ -153,5 +174,18 @@ fn spawn_enemies(
             meshes,
             materials,
         ));
+    }
+}
+
+fn move_followers(
+    followed_by_q: Query<(&FollowedBy, &Transform), Without<Following>>,
+    mut following_q: Query<&mut Transform, With<Following>>,
+) {
+    for (followed_by, transform) in followed_by_q {
+        for entity in followed_by.iter() {
+            if let Ok(mut following_transform) = following_q.get_mut(entity) {
+                following_transform.set_if_neq(*transform);
+            }
+        }
     }
 }

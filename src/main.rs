@@ -57,22 +57,27 @@ pub(crate) struct HealthBar;
 struct AttackHitBoxTimer(Timer);
 
 #[derive(PhysicsLayer, Default)]
-enum GameLayer {
+enum GameCollisionLayer {
     #[default]
     Default,
     Enemy,
     EnemyAttack,
+    Mark,
     Player,
     PlayerAttack,
 }
 
-impl GameLayer {
+impl GameCollisionLayer {
     fn enemy_attack() -> CollisionLayers {
-        CollisionLayers::new(GameLayer::EnemyAttack, GameLayer::Player)
+        CollisionLayers::new(GameCollisionLayer::EnemyAttack, GameCollisionLayer::Player)
+    }
+
+    fn mark() -> CollisionLayers {
+        CollisionLayers::new(GameCollisionLayer::Mark, GameCollisionLayer::Mark)
     }
 
     fn player_attack() -> CollisionLayers {
-        CollisionLayers::new(GameLayer::PlayerAttack, GameLayer::Enemy)
+        CollisionLayers::new(GameCollisionLayer::PlayerAttack, GameCollisionLayer::Enemy)
     }
 }
 
@@ -97,6 +102,7 @@ fn main() -> AppExit {
         EnhancedInputPlugin,
         PhysicsDebugPlugin::default(),
         PhysicsPlugins::default().with_length_unit(100.),
+        PhysicsPickingPlugin,
     ))
     // My plugins.
     .add_plugins((PlayerPlugin, EnemyPlugin, CameraPlugin))
@@ -189,9 +195,9 @@ fn tick_attack_timer(
             remove_hitbox_timer = true;
 
             let layer = if is_enemy {
-                GameLayer::enemy_attack()
+                GameCollisionLayer::enemy_attack()
             } else if is_player {
-                GameLayer::player_attack()
+                GameCollisionLayer::player_attack()
             } else if is_enemy && is_player {
                 panic!("Entity is player and enemy?")
             } else {
@@ -244,6 +250,10 @@ fn kinematic_collisions(
     mut controllers: Query<(&mut Position, &mut LinearVelocity), With<RigidBody>>,
     time: Res<Time<Virtual>>,
 ) {
+    if time.is_paused() {
+        return;
+    }
+
     for contacts in collisions.iter() {
         let Ok([&ColliderOf { body: rb1 }, &ColliderOf { body: rb2 }]) =
             collider_rbs.get_many([contacts.collider1, contacts.collider2])

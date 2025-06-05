@@ -27,6 +27,7 @@ bevy = { version = "0.16", default-features = false, features = [
   "web",
   "webgl2",
   "x11",
+  "track_location",
 ] }
 bevy_cursor = { version = "0.6", features = ["2d"] }
 bevy_enhanced_input = "0.12"
