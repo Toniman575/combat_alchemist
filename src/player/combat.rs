@@ -51,10 +51,10 @@ pub(super) fn primary_attack(
         .insert(Attacking {
             target: normalized_direction_vector,
             rooted: Duration::from_secs_f32(0.35),
-            spawn_hitbox: Duration::from_secs_f32(0.25),
+            spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 100.,
-            hitbox: Collider::rectangle(5., 50.),
+            hitbox: vec![Collider::rectangle(5., 50.)],
             hitbox_duration: Duration::from_secs_f32(0.1),
             movement: Some(axis2d),
         });
@@ -66,7 +66,7 @@ pub(super) fn secondary_attack(
     mut commands: Commands,
 ) {
     for (entity, mut health) in mark_q {
-        health.0 -= 10;
+        health.current -= 10;
         commands.entity(entity).remove::<Mark>();
     }
 }

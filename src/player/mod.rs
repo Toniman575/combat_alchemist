@@ -1,14 +1,14 @@
-use avian2d::prelude::*;
-use bevy::prelude::*;
-
-use bevy_enhanced_input::prelude::*;
-
 mod combat;
 mod input;
 mod movement;
 
+use avian2d::prelude::*;
+use bevy::{color::palettes::css::RED, prelude::*};
+
+use bevy_enhanced_input::prelude::*;
+
 use crate::{
-    GameLayer, Health, InGame, Moving,
+    GameLayer, Health, HealthBar, InGame, Moving,
     player::{
         combat::{apply_mark, primary_attack, secondary_attack},
         input::binding,
@@ -38,7 +38,7 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component, Reflect)]
 #[require(
-    Health(100),
+    Health { current: 100, max: 100 },
     Name::new("Player"),
     RigidBody::Kinematic,
     Collider::circle(25.),
@@ -52,17 +52,33 @@ pub struct Player {
 }
 
 impl Player {
-    fn bundle(speed: f32) -> impl Bundle {
+    fn bundle(
+        speed: f32,
+        mut meshes: ResMut<'_, Assets<Mesh>>,
+        mut materials: ResMut<'_, Assets<ColorMaterial>>,
+    ) -> impl Bundle {
         (
             Self { speed },
             CollisionLayers::new(
                 GameLayer::Player,
                 [GameLayer::Enemy, GameLayer::EnemyAttack],
             ),
+            children![
+(                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
+                MeshMaterial2d(materials.add(Color::from(RED))),
+                Transform::from_translation(Vec3::new(0., 50., 1.)),
+                HealthBar,
+                Name::new("Healthbar"),
+                Visibility::Visible,)
+            ],
         )
     }
 }
 
-fn startup(mut commands: Commands) {
-    commands.spawn(Player::bundle(250.));
+fn startup(
+    mut commands: Commands,
+    meshes: ResMut<'_, Assets<Mesh>>,
+    materials: ResMut<'_, Assets<ColorMaterial>>,
+) {
+    commands.spawn(Player::bundle(250., meshes, materials));
 }

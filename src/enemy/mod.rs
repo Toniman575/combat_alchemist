@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::Stopwatch};
+use bevy::{color::palettes::css::RED, prelude::*, time::Stopwatch};
 
-use crate::{Attacking, GameLayer, Health, Moving, player::Player};
+use crate::{Attacking, GameLayer, Health, HealthBar, Moving, player::Player};
 
 pub(super) struct EnemyPlugin;
 
@@ -24,7 +24,6 @@ struct SpawnTimer(Timer);
 
 #[derive(Component, Reflect)]
 #[require(
-    Health(30),
     Moving,
     RigidBody::Kinematic,
     Collider::circle(30.),
@@ -36,10 +35,21 @@ pub struct Enemy {
 }
 
 impl Enemy {
-    fn bundle(speed: f32, health: i32, collider_size: f32, name: String, pos: Vec2) -> impl Bundle {
+    fn bundle(
+        speed: f32,
+        health: i16,
+        collider_size: f32,
+        name: String,
+        pos: Vec2,
+        mut meshes: ResMut<'_, Assets<Mesh>>,
+        mut materials: ResMut<'_, Assets<ColorMaterial>>,
+    ) -> impl Bundle {
         (
             Self { speed },
-            Health(health),
+            Health {
+                current: health,
+                max: health,
+            },
             CollisionLayers::new(
                 GameLayer::Enemy,
                 [[GameLayer::Enemy, GameLayer::Player, GameLayer::PlayerAttack]],
@@ -47,26 +57,42 @@ impl Enemy {
             Collider::circle(collider_size),
             Name::new(name),
             Transform::from_translation(pos.extend(1.)),
+            children![(
+                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
+                MeshMaterial2d(materials.add(Color::from(RED))),
+                Transform::from_translation(Vec3::new(0., 50., 1.)),
+                HealthBar,
+                Name::new("Healthbar"),
+                Visibility::Hidden,
+            )],
         )
     }
 }
 
-fn startup(mut commands: Commands) {
+fn startup(
+    mut commands: Commands,
+    meshes: ResMut<'_, Assets<Mesh>>,
+    materials: ResMut<'_, Assets<ColorMaterial>>,
+) {
     commands.spawn(Enemy::bundle(
         150.,
         30,
         30.,
         String::from("Training Dummy"),
         Vec2::new(-100., -100.),
+        meshes,
+        materials,
     ));
 }
 
 fn enemy_attack(
     trigger: Trigger<OnCollisionStart>,
+    mut commands: Commands,
     mut player: Single<(Entity, &mut Health), With<Player>>,
 ) {
     if player.0 == (trigger.collider) {
-        player.1.0 -= 10;
+        player.1.current -= 10;
+        commands.entity(trigger.target()).insert(ColliderDisabled);
     }
 }
 
@@ -94,10 +120,10 @@ fn move_enemies(
                 .insert(Attacking {
                     target: normalized_direction_vector,
                     rooted: Duration::from_secs_f32(0.5),
-                    spawn_hitbox: Duration::from_secs_f32(0.4),
+                    spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
                     stopwatch: Stopwatch::new(),
                     range: 80.,
-                    hitbox: Collider::rectangle(5., 50.),
+                    hitbox: vec![Collider::rectangle(5., 50.)],
                     hitbox_duration: Duration::from_secs_f32(0.1),
                     movement: None,
                 });
@@ -110,7 +136,13 @@ fn move_enemies(
     }
 }
 
-fn spawn_enemies(mut commands: Commands, mut timer: ResMut<SpawnTimer>, time: Res<Time>) {
+fn spawn_enemies(
+    mut commands: Commands,
+    mut timer: ResMut<SpawnTimer>,
+    time: Res<Time<Virtual>>,
+    meshes: ResMut<'_, Assets<Mesh>>,
+    materials: ResMut<'_, Assets<ColorMaterial>>,
+) {
     if timer.tick(time.delta()).finished() {
         commands.spawn(Enemy::bundle(
             150.,
@@ -118,6 +150,8 @@ fn spawn_enemies(mut commands: Commands, mut timer: ResMut<SpawnTimer>, time: Re
             30.,
             String::from("Training Dummy"),
             Vec2::new(-100., -100.),
+            meshes,
+            materials,
         ));
     }
 }

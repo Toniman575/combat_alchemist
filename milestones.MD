@@ -9,19 +9,19 @@
 ### Milestone 2
 
     - [ ] Refine combat and player Feedback
+    - [ ] Basic Sprites
+    - [ ] Animations
+    - [ ] Basic Sound
+
+### Milestone 3
+
     - [ ] Add more "Markers" and "Release" Mechanics
     - [ ] Add more Enemy Types
     - [ ] Add some kind of Progression other than new enemies spawning
     - [ ] Ingame tutorial
 
-### Milestone 3
-
-    - [ ] Basic Sprites
-    - [ ] Basic Sound
-    - [ ] Animations
-
 ### Milestone 5
 
     - [ ] Game Menu
-    - [ ] Pausing
+    - [x] Pausing
     - [ ] Improved Camera
