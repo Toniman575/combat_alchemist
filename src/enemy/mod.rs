@@ -5,7 +5,7 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatc
 
 use crate::{
     AssetState, Attacking, GameCollisionLayer, GameState, Health, HealthBar, Moving, SpriteAssets,
-    player::Player,
+    ZLayer, player::Player,
 };
 
 pub(super) struct EnemyPlugin;
@@ -73,11 +73,11 @@ impl Enemy {
             ),
             Collider::circle(collider_size),
             Name::new(name),
-            Transform::from_translation(pos.extend(1.)),
+            Transform::from_translation(pos.extend(ZLayer::Enemies.z_layer())),
             children![(
                 Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
                 MeshMaterial2d(materials.add(Color::from(RED))),
-                Transform::from_translation(Vec3::new(0., 17.5, 1.)),
+                Transform::from_translation(Vec3::new(0., 17.5, ZLayer::HealthBar.z_layer())),
                 HealthBar,
                 Name::new("Healthbar"),
                 Visibility::Hidden,

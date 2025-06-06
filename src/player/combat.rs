@@ -6,10 +6,10 @@ use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    Attacking, GameCollisionLayer, Health, InGame, Moving,
+    Attacking, GameCollisionLayer, Health, InGame, Moving, ZLayer,
     enemy::{Enemy, FollowedBy, Following},
     player::{
-        Player,
+        Player, WeaponSprite,
         input::{MovePlayer, PrimaryAttack, SecondaryAttack},
     },
 };
@@ -30,6 +30,17 @@ pub enum AttackMarker {
 
 #[derive(Event)]
 pub struct TriggerMark(HashSet<Entity>);
+
+#[derive(Component, Reflect)]
+pub(super) struct Swinging {
+    from: Transform,
+    from_duration: Duration,
+    from_easing: EaseFunction,
+    stopwatch: Stopwatch,
+    to: Transform,
+    to_duration: Duration,
+    to_easing: EaseFunction,
+}
 
 pub(super) fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
@@ -90,6 +101,7 @@ pub(super) fn primary_attack(
     _: Trigger<Fired<PrimaryAttack>>,
     cursor_pos: Res<CursorLocation>,
     player: Single<(Entity, &Transform, &Actions<InGame>), (With<Player>, Without<Attacking>)>,
+    player_weapon: Single<(Entity, &Transform), With<WeaponSprite>>,
     mut commands: Commands,
 ) {
     let Some(cursor_pos) = cursor_pos.world_position() else {
@@ -117,6 +129,22 @@ pub(super) fn primary_attack(
             movement: Some(axis2d),
             marker: Some(AttackMarker::AppliesMark),
         });
+
+    let mut transform = Transform::from_translation(
+        (player_pos + normalized_direction_vector * 20.).extend(ZLayer::PlayerWeapon.z_layer()),
+    );
+
+    transform.rotation = Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
+
+    commands.entity(player_weapon.0).insert(Swinging {
+        from: *player_weapon.1,
+        from_easing: EaseFunction::BackIn,
+        from_duration: Duration::from_secs_f32(0.25),
+        to: transform,
+        to_easing: EaseFunction::BackOut,
+        to_duration: Duration::from_secs_f32(0.1),
+        stopwatch: Stopwatch::new(),
+    });
 }
 
 pub(super) fn secondary_attack(
@@ -190,4 +218,39 @@ pub(super) fn trigger_mark(
         .unwrap()
         .current -= 10;
     commands.entity(trigger_entity).despawn();
+}
+
+pub(super) fn animate_swing(
+    swing_q: Query<(Entity, &mut Transform, &mut Swinging)>,
+    mut commands: Commands,
+    time: Res<Time<Virtual>>,
+) {
+    let delta = time.delta();
+
+    for (entity, mut transform, mut swinging) in swing_q {
+        swinging.stopwatch.tick(delta);
+        let elapsed = swinging.stopwatch.elapsed();
+        if swinging.from_duration >= swinging.stopwatch.elapsed() {
+            let t = (elapsed.as_secs_f32() / swinging.from_duration.as_secs_f32()).clamp(0., 1.);
+            transform.translation = transform.translation.lerp(
+                swinging.to.translation,
+                swinging.from_easing.sample(t).unwrap(),
+            );
+            transform.rotation = transform.rotation.lerp(
+                swinging.from.rotation,
+                swinging.from_easing.sample(t).unwrap(),
+            );
+        } else if swinging.to_duration >= swinging.stopwatch.elapsed() {
+            let t = (elapsed.as_secs_f32() / swinging.to_duration.as_secs_f32()).clamp(0., 1.);
+            transform.translation = transform.translation.lerp(
+                swinging.from.translation,
+                swinging.to_easing.sample(t).unwrap(),
+            );
+            transform.rotation = transform
+                .rotation
+                .lerp(swinging.to.rotation, swinging.to_easing.sample(t).unwrap());
+        } else {
+            commands.entity(entity).remove::<Swinging>();
+        }
+    }
 }

@@ -24,7 +24,7 @@
     - [ ] Add some kind of Progression other than new enemies spawning
     - [ ] Ingame tutorial
 
-### Milestone 5
+### Milestone 4
 
     - [ ] Game Menu
     - [x] Pausing

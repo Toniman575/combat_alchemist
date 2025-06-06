@@ -36,12 +36,39 @@ enum GameState {
     #[default]
     Running,
 }
+
+enum ZLayer {
+    Enemies,
+    EnemiesWeapon,
+    HealthBar,
+    Map,
+    Player,
+    PlayerWeapon,
+}
+
+impl ZLayer {
+    fn z_layer(&self) -> f32 {
+        match self {
+            ZLayer::Enemies => 2.,
+            ZLayer::EnemiesWeapon => 1.,
+            ZLayer::HealthBar => 1.,
+            ZLayer::Map => 0.,
+            ZLayer::Player => 3.,
+            ZLayer::PlayerWeapon => 3.5,
+        }
+    }
+}
+
 #[derive(AssetCollection, Resource)]
 struct SpriteAssets {
     #[asset(path = "sprites/enemy.png")]
     enemy: Handle<Image>,
     #[asset(path = "sprites/player.png")]
     player: Handle<Image>,
+    #[asset(path = "sprites/potion.png")]
+    potion: Handle<Image>,
+    #[asset(path = "sprites/staff.png")]
+    staff: Handle<Image>,
 }
 
 #[derive(InputContext)]
@@ -192,7 +219,7 @@ fn startup(mut commands: Commands) {
                             custom_size,
                             ..default()
                         },
-                        Transform::from_xyz(x, y, 0.),
+                        Transform::from_xyz(x, y, ZLayer::Map.z_layer()),
                         Visibility::Inherited,
                     ));
                 }
@@ -215,6 +242,7 @@ fn tick_hitbox_timer(
 fn tick_attack_timer(
     mut commands: Commands,
     attacking_q: Query<(Entity, &mut Attacking, &Transform, Has<Enemy>, Has<Player>)>,
+    sprite_assets: Res<SpriteAssets>,
     time: Res<Time<Virtual>>,
 ) {
     for (entity, mut attacking, transform, is_enemy, is_player) in attacking_q {
@@ -236,7 +264,7 @@ fn tick_attack_timer(
             };
 
             let mut new_transform =
-                Transform::from_translation((attacking.target * attacking.range).extend(2.));
+                Transform::from_translation((attacking.target * attacking.range).extend(0.));
 
             if attacking.hitbox_movement.is_some() {
                 new_transform.translation += transform.translation;
@@ -267,6 +295,11 @@ fn tick_attack_timer(
                     TransformInterpolation,
                     LinearVelocity(hitbox_movement * 80.),
                     RigidBody::Kinematic,
+                    Sprite {
+                        image: sprite_assets.potion.clone(),
+                        custom_size: Some(Vec2::new(7., 7.)),
+                        ..default()
+                    },
                 ));
             } else {
                 let child_entity = child_entity_commands.id();

@@ -8,13 +8,14 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    AssetState, GameCollisionLayer, Health, HealthBar, InGame, Moving, SpriteAssets,
+    AssetState, GameCollisionLayer, Health, HealthBar, InGame, Moving, SpriteAssets, ZLayer,
     player::{
         combat::{
-            apply_mark, primary_attack, secondary_attack, trigger_mark, triggers_mark_collision,
+            animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
+            triggers_mark_collision,
         },
-        input::{add_mouseover, binding, remove_mouseover},
-        movement::{apply_velocity, stop_velocity},
+        input::binding,
+        movement::{apply_velocity, stop_velocity, weapon_follow},
     },
 };
 
@@ -23,7 +24,7 @@ pub(super) use crate::player::combat::AttackMarker;
 pub(super) use crate::player::combat::TriggersMark;
 
 #[cfg(debug_assertions)]
-use crate::player::{combat::Mark, input::Mouseover};
+use crate::player::combat::{Mark, Swinging};
 
 pub(super) struct PlayerPlugin;
 
@@ -35,16 +36,15 @@ impl Plugin for PlayerPlugin {
             .add_observer(primary_attack)
             .add_observer(secondary_attack)
             .add_observer(apply_mark)
-            .add_observer(add_mouseover)
-            .add_observer(remove_mouseover)
             .add_observer(trigger_mark)
             .add_observer(triggers_mark_collision)
-            .add_systems(OnEnter(AssetState::Loaded), startup);
+            .add_systems(OnEnter(AssetState::Loaded), startup)
+            .add_systems(Update, (weapon_follow, animate_swing));
 
         #[cfg(debug_assertions)]
         app.register_type::<Player>()
             .register_type::<Mark>()
-            .register_type::<Mouseover>();
+            .register_type::<Swinging>();
     }
 }
 
@@ -56,7 +56,7 @@ impl Plugin for PlayerPlugin {
     Collider::circle(5.),
     TransformExtrapolation,
     Actions::<InGame>,
-    Transform::from_xyz(0., 0., 1.),
+    Transform::from_xyz(0., 0., ZLayer::Player.z_layer()),
     Moving,
 )]
 pub struct Player {
@@ -84,7 +84,7 @@ impl Player {
             children![(
                 Mesh2d(meshes.add(Rectangle::new(15., 2.5))),
                 MeshMaterial2d(materials.add(Color::from(RED))),
-                Transform::from_translation(Vec3::new(0., 17.5, 1.)),
+                Transform::from_translation(Vec3::new(0., 17.5, ZLayer::HealthBar.z_layer())),
                 HealthBar,
                 Name::new("Healthbar"),
                 Visibility::Visible,
@@ -93,11 +93,22 @@ impl Player {
     }
 }
 
+#[derive(Component, Reflect)]
+struct WeaponSprite;
+
 fn startup(
     mut commands: Commands,
     meshes: ResMut<'_, Assets<Mesh>>,
     materials: ResMut<'_, Assets<ColorMaterial>>,
     sprite_assets: Res<SpriteAssets>,
 ) {
+    commands.spawn((
+        Sprite {
+            image: sprite_assets.staff.clone(),
+            ..default()
+        },
+        Transform::from_xyz(0., 0., ZLayer::PlayerWeapon.z_layer()),
+        WeaponSprite,
+    ));
     commands.spawn(Player::bundle(50., sprite_assets, meshes, materials));
 }
