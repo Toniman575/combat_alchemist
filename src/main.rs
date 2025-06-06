@@ -11,15 +11,14 @@ use avian2d::{
 use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch};
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
-use rand::random;
-
 #[cfg(debug_assertions)]
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+use rand::random;
 
 use crate::{
     camera::CameraPlugin,
     enemy::{Enemy, EnemyPlugin},
-    player::{Player, PlayerPlugin},
+    player::{AppliesMark, AttackMarker, Player, PlayerPlugin, TriggersMark},
 };
 
 #[derive(InputContext)]
@@ -36,6 +35,8 @@ pub struct Moving;
 struct Attacking {
     hitbox: Vec<Collider>,
     hitbox_duration: Duration,
+    hitbox_movement: Option<Vec2>,
+    marker: Option<AttackMarker>,
     movement: Option<Vec2>,
     range: f32,
     rooted: Duration,
@@ -181,18 +182,16 @@ fn tick_hitbox_timer(
 
 fn tick_attack_timer(
     mut commands: Commands,
-    attacking_q: Query<(Entity, &mut Attacking, Has<Enemy>, Has<Player>)>,
+    attacking_q: Query<(Entity, &mut Attacking, &Transform, Has<Enemy>, Has<Player>)>,
     time: Res<Time<Virtual>>,
 ) {
-    for (entity, mut attacking, is_enemy, is_player) in attacking_q {
+    for (entity, mut attacking, transform, is_enemy, is_player) in attacking_q {
         attacking.stopwatch.tick(time.delta());
-
-        let mut remove_hitbox_timer = false;
 
         if let Some(spawn_hitbox_timer) = attacking.spawn_hitbox.last()
             && *spawn_hitbox_timer <= attacking.stopwatch.elapsed()
         {
-            remove_hitbox_timer = true;
+            attacking.spawn_hitbox.pop();
 
             let layer = if is_enemy {
                 GameCollisionLayer::enemy_attack()
@@ -207,9 +206,15 @@ fn tick_attack_timer(
             let mut new_transform =
                 Transform::from_translation((attacking.target * attacking.range).extend(2.));
 
+            if attacking.hitbox_movement.is_some() {
+                new_transform.translation += transform.translation;
+            }
+
             new_transform.rotation = Quat::from_rotation_arc(Vec3::Y, attacking.target.extend(0.));
 
-            commands.entity(entity).with_child((
+            let mut child_entity_commands = commands.spawn_empty();
+
+            child_entity_commands.insert((
                 attacking.hitbox.pop().unwrap(),
                 Sensor,
                 new_transform,
@@ -217,10 +222,24 @@ fn tick_attack_timer(
                 AttackHitBoxTimer(Timer::new(attacking.hitbox_duration, TimerMode::Once)),
                 layer,
             ));
-        }
 
-        if remove_hitbox_timer {
-            attacking.spawn_hitbox.pop();
+            if let Some(marker) = &attacking.marker {
+                match marker {
+                    AttackMarker::AppliesMark => child_entity_commands.insert(AppliesMark),
+                    AttackMarker::TriggersMark => child_entity_commands.insert(TriggersMark),
+                };
+            }
+
+            if let Some(hitbox_movement) = attacking.hitbox_movement {
+                child_entity_commands.insert((
+                    TransformInterpolation,
+                    LinearVelocity(hitbox_movement * 250.),
+                    RigidBody::Kinematic,
+                ));
+            } else {
+                let child_entity = child_entity_commands.id();
+                commands.entity(entity).add_child(child_entity);
+            }
         }
 
         if attacking.rooted <= attacking.stopwatch.elapsed() {

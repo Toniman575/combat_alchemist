@@ -10,11 +10,17 @@ use bevy_enhanced_input::prelude::*;
 use crate::{
     GameCollisionLayer, Health, HealthBar, InGame, Moving,
     player::{
-        combat::{apply_mark, primary_attack, secondary_attack, trigger_mark},
+        combat::{
+            apply_mark, primary_attack, secondary_attack, trigger_mark, triggers_mark_collision,
+        },
         input::{add_mouseover, binding, remove_mouseover},
         movement::{apply_velocity, stop_velocity},
     },
 };
+
+pub(super) use crate::player::combat::AppliesMark;
+pub(super) use crate::player::combat::AttackMarker;
+pub(super) use crate::player::combat::TriggersMark;
 
 #[cfg(debug_assertions)]
 use crate::player::{combat::Mark, input::Mouseover};
@@ -32,6 +38,7 @@ impl Plugin for PlayerPlugin {
             .add_observer(add_mouseover)
             .add_observer(remove_mouseover)
             .add_observer(trigger_mark)
+            .add_observer(triggers_mark_collision)
             .add_systems(Startup, startup);
 
         #[cfg(debug_assertions)]

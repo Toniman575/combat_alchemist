@@ -139,6 +139,7 @@ fn move_enemies(
                 .entity(enemy_entity)
                 .remove::<Moving>()
                 .insert(Attacking {
+                    hitbox_movement: None,
                     target: normalized_direction_vector,
                     rooted: Duration::from_secs_f32(0.5),
                     spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
@@ -147,6 +148,7 @@ fn move_enemies(
                     hitbox: vec![Collider::rectangle(5., 50.)],
                     hitbox_duration: Duration::from_secs_f32(0.1),
                     movement: None,
+                    marker: None,
                 });
             vel.set_if_neq(LinearVelocity::ZERO);
 
