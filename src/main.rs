@@ -9,6 +9,7 @@ use avian2d::{
     prelude::*,
 };
 use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch};
+use bevy_asset_loader::prelude::*;
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 #[cfg(debug_assertions)]
@@ -20,6 +21,28 @@ use crate::{
     enemy::{Enemy, EnemyPlugin},
     player::{AppliesMark, AttackMarker, Player, PlayerPlugin, TriggersMark},
 };
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
+enum AssetState {
+    Loaded,
+    #[default]
+    Loading,
+}
+
+#[derive(SubStates, Clone, PartialEq, Eq, Hash, Debug, Default)]
+#[source(AssetState = AssetState::Loaded)]
+enum GameState {
+    Paused,
+    #[default]
+    Running,
+}
+#[derive(AssetCollection, Resource)]
+struct SpriteAssets {
+    #[asset(path = "sprites/enemy.png")]
+    enemy: Handle<Image>,
+    #[asset(path = "sprites/player.png")]
+    player: Handle<Image>,
+}
 
 #[derive(InputContext)]
 struct InGame;
@@ -86,6 +109,7 @@ fn main() -> AppExit {
     let mut app = App::new();
     app.add_plugins((
         DefaultPlugins
+            .set(ImagePlugin::default_nearest())
             .set(AssetPlugin {
                 meta_check: AssetMetaCheck::Never,
                 ..default()
@@ -101,17 +125,23 @@ fn main() -> AppExit {
             }),
         TrackCursorPlugin,
         EnhancedInputPlugin,
-        PhysicsDebugPlugin::default(),
-        PhysicsPlugins::default().with_length_unit(100.),
+        PhysicsPlugins::default().with_length_unit(2.5),
         PhysicsPickingPlugin,
     ))
+    .init_state::<AssetState>()
+    .add_loading_state(
+        LoadingState::new(AssetState::Loading)
+            .continue_to_state(AssetState::Loaded)
+            .load_collection::<SpriteAssets>(),
+    )
+    .add_sub_state::<GameState>()
     // My plugins.
     .add_plugins((PlayerPlugin, EnemyPlugin, CameraPlugin))
     .add_input_context::<InGame>()
     .insert_resource(Gravity::ZERO)
     .add_observer(binding)
     .add_observer(pause_game)
-    .add_systems(Startup, startup)
+    .add_systems(OnEnter(AssetState::Loaded), startup)
     .add_systems(
         Update,
         (
@@ -120,11 +150,13 @@ fn main() -> AppExit {
             kinematic_collisions,
             tick_attack_timer,
             attacking_movement,
-        ),
+        )
+            .run_if(in_state(GameState::Running)),
     );
 
     #[cfg(debug_assertions)]
     app.add_plugins((
+        PhysicsDebugPlugin::default(),
         EguiPlugin {
             enable_multipass_for_primary_context: true,
         },
@@ -233,7 +265,7 @@ fn tick_attack_timer(
             if let Some(hitbox_movement) = attacking.hitbox_movement {
                 child_entity_commands.insert((
                     TransformInterpolation,
-                    LinearVelocity(hitbox_movement * 250.),
+                    LinearVelocity(hitbox_movement * 80.),
                     RigidBody::Kinematic,
                 ));
             } else {
@@ -257,7 +289,7 @@ fn attacking_movement(vel_q: Query<(&mut LinearVelocity, &Attacking)>) {
 
         let t = (attacking.stopwatch.elapsed_secs() / attacking.rooted.as_secs_f32()).clamp(0., 1.);
         lin_vel.set_if_neq(LinearVelocity(
-            movement.lerp(Vec2::ZERO, EaseFunction::QuarticOut.sample(t).unwrap()) * 250.,
+            movement.lerp(Vec2::ZERO, EaseFunction::QuarticOut.sample(t).unwrap()) * 50.,
         ));
     }
 }
@@ -269,10 +301,6 @@ fn kinematic_collisions(
     mut controllers: Query<(&mut Position, &mut LinearVelocity), With<RigidBody>>,
     time: Res<Time<Virtual>>,
 ) {
-    if time.is_paused() {
-        return;
-    }
-
     for contacts in collisions.iter() {
         let Ok([&ColliderOf { body: rb1 }, &ColliderOf { body: rb2 }]) =
             collider_rbs.get_many([contacts.collider1, contacts.collider2])
@@ -348,10 +376,16 @@ fn binding(trigger: Trigger<Binding<InGame>>, mut players: Query<&mut Actions<In
         .with_conditions(Press::default());
 }
 
-fn pause_game(_: Trigger<Fired<Pause>>, mut time: ResMut<Time<Virtual>>) {
+fn pause_game(
+    _: Trigger<Fired<Pause>>,
+    mut time: ResMut<Time<Virtual>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
     if time.is_paused() {
+        next_state.set(GameState::Running);
         time.unpause();
     } else {
+        next_state.set(GameState::Paused);
         time.pause();
     }
 }

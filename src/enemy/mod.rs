@@ -1,17 +1,23 @@
 use std::time::Duration;
 
 use avian2d::prelude::*;
-use bevy::{color::palettes::css::RED, prelude::*, time::Stopwatch};
+use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatch};
 
-use crate::{Attacking, GameCollisionLayer, Health, HealthBar, Moving, player::Player};
+use crate::{
+    AssetState, Attacking, GameCollisionLayer, GameState, Health, HealthBar, Moving, SpriteAssets,
+    player::Player,
+};
 
 pub(super) struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(enemy_attack)
-            .add_systems(Startup, startup)
-            .add_systems(Update, (move_enemies, spawn_enemies, move_followers))
+            .add_systems(OnEnter(AssetState::Loaded), startup)
+            .add_systems(
+                Update,
+                (move_enemies, spawn_enemies, move_followers).run_if(in_state(GameState::Running)),
+            )
             .insert_resource(SpawnTimer(Timer::from_seconds(10., TimerMode::Repeating)));
 
         #[cfg(debug_assertions)]
@@ -41,6 +47,7 @@ impl Enemy {
         collider_size: f32,
         name: String,
         pos: Vec2,
+        sprite_assets: Res<SpriteAssets>,
         mut meshes: ResMut<'_, Assets<Mesh>>,
         mut materials: ResMut<'_, Assets<ColorMaterial>>,
     ) -> impl Bundle {
@@ -49,6 +56,12 @@ impl Enemy {
             Health {
                 current: health,
                 max: health,
+            },
+            Sprite {
+                image: sprite_assets.enemy.clone(),
+                anchor: Anchor::Custom(Vec2::new(0., -0.1)),
+                custom_size: Some(Vec2::new(20., 20.)),
+                ..default()
             },
             CollisionLayers::new(
                 GameCollisionLayer::Enemy,
@@ -62,9 +75,9 @@ impl Enemy {
             Name::new(name),
             Transform::from_translation(pos.extend(1.)),
             children![(
-                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
+                Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
                 MeshMaterial2d(materials.add(Color::from(RED))),
-                Transform::from_translation(Vec3::new(0., 50., 1.)),
+                Transform::from_translation(Vec3::new(0., 17.5, 1.)),
                 HealthBar,
                 Name::new("Healthbar"),
                 Visibility::Hidden,
@@ -92,15 +105,17 @@ pub(super) struct FollowedBy(Vec<Entity>);
 
 fn startup(
     mut commands: Commands,
+    sprite_assets: Res<SpriteAssets>,
     meshes: ResMut<'_, Assets<Mesh>>,
     materials: ResMut<'_, Assets<ColorMaterial>>,
 ) {
     commands.spawn(Enemy::bundle(
-        150.,
-        30,
         30.,
+        30,
+        8.,
         String::from("Training Dummy"),
         Vec2::new(-100., -100.),
+        sprite_assets,
         meshes,
         materials,
     ));
@@ -129,7 +144,7 @@ fn move_enemies(
         let normalized_direction_vector =
             (player.translation.xy() - enemy_transform.translation.xy()).normalize_or_zero();
 
-        if enemy_transform.translation.distance(player.translation) < 100. {
+        if enemy_transform.translation.distance(player.translation) < 30. {
             let mut new_transform =
                 Transform::from_translation((normalized_direction_vector * 80.).extend(0.));
             new_transform.rotation =
@@ -144,8 +159,8 @@ fn move_enemies(
                     rooted: Duration::from_secs_f32(0.5),
                     spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
                     stopwatch: Stopwatch::new(),
-                    range: 80.,
-                    hitbox: vec![Collider::rectangle(5., 50.)],
+                    range: 25.,
+                    hitbox: vec![Collider::rectangle(15., 15.)],
                     hitbox_duration: Duration::from_secs_f32(0.1),
                     movement: None,
                     marker: None,
@@ -163,16 +178,18 @@ fn spawn_enemies(
     mut commands: Commands,
     mut timer: ResMut<SpawnTimer>,
     time: Res<Time<Virtual>>,
+    sprite_assets: Res<SpriteAssets>,
     meshes: ResMut<'_, Assets<Mesh>>,
     materials: ResMut<'_, Assets<ColorMaterial>>,
 ) {
     if timer.tick(time.delta()).finished() {
         commands.spawn(Enemy::bundle(
-            150.,
-            30,
             30.,
+            30,
+            8.,
             String::from("Training Dummy"),
             Vec2::new(-100., -100.),
+            sprite_assets,
             meshes,
             materials,
         ));

@@ -3,12 +3,12 @@ mod input;
 mod movement;
 
 use avian2d::prelude::*;
-use bevy::{color::palettes::css::RED, prelude::*};
+use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    GameCollisionLayer, Health, HealthBar, InGame, Moving,
+    AssetState, GameCollisionLayer, Health, HealthBar, InGame, Moving, SpriteAssets,
     player::{
         combat::{
             apply_mark, primary_attack, secondary_attack, trigger_mark, triggers_mark_collision,
@@ -39,7 +39,7 @@ impl Plugin for PlayerPlugin {
             .add_observer(remove_mouseover)
             .add_observer(trigger_mark)
             .add_observer(triggers_mark_collision)
-            .add_systems(Startup, startup);
+            .add_systems(OnEnter(AssetState::Loaded), startup);
 
         #[cfg(debug_assertions)]
         app.register_type::<Player>()
@@ -53,7 +53,7 @@ impl Plugin for PlayerPlugin {
     Health { current: 100, max: 100 },
     Name::new("Player"),
     RigidBody::Kinematic,
-    Collider::circle(25.),
+    Collider::circle(5.),
     TransformExtrapolation,
     Actions::<InGame>,
     Transform::from_xyz(0., 0., 1.),
@@ -66,19 +66,25 @@ pub struct Player {
 impl Player {
     fn bundle(
         speed: f32,
+        sprite_assets: Res<SpriteAssets>,
         mut meshes: ResMut<'_, Assets<Mesh>>,
         mut materials: ResMut<'_, Assets<ColorMaterial>>,
     ) -> impl Bundle {
         (
             Self { speed },
+            Sprite {
+                image: sprite_assets.player.clone(),
+                anchor: Anchor::Custom(Vec2::new(0., -0.2)),
+                ..default()
+            },
             CollisionLayers::new(
                 GameCollisionLayer::Player,
                 [GameCollisionLayer::Enemy, GameCollisionLayer::EnemyAttack],
             ),
             children![(
-                Mesh2d(meshes.add(Rectangle::new(32., 5.))),
+                Mesh2d(meshes.add(Rectangle::new(15., 2.5))),
                 MeshMaterial2d(materials.add(Color::from(RED))),
-                Transform::from_translation(Vec3::new(0., 50., 1.)),
+                Transform::from_translation(Vec3::new(0., 17.5, 1.)),
                 HealthBar,
                 Name::new("Healthbar"),
                 Visibility::Visible,
@@ -91,6 +97,7 @@ fn startup(
     mut commands: Commands,
     meshes: ResMut<'_, Assets<Mesh>>,
     materials: ResMut<'_, Assets<ColorMaterial>>,
+    sprite_assets: Res<SpriteAssets>,
 ) {
-    commands.spawn(Player::bundle(250., meshes, materials));
+    commands.spawn(Player::bundle(50., sprite_assets, meshes, materials));
 }

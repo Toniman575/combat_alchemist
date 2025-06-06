@@ -48,7 +48,7 @@ pub(super) fn apply_mark(
     commands.entity(enemy_entity).insert(Mark);
 
     commands.spawn((
-        Collider::circle(100.),
+        Collider::circle(50.),
         Sensor,
         GameCollisionLayer::mark(),
         Transform::from_xyz(0., 0., 0.),
@@ -111,8 +111,8 @@ pub(super) fn primary_attack(
             rooted: Duration::from_secs_f32(0.35),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
-            range: 100.,
-            hitbox: vec![Collider::rectangle(5., 50.)],
+            range: 20.,
+            hitbox: vec![Collider::rectangle(2., 15.)],
             hitbox_duration: Duration::from_secs_f32(0.1),
             movement: Some(axis2d),
             marker: Some(AttackMarker::AppliesMark),
@@ -144,8 +144,8 @@ pub(super) fn secondary_attack(
             rooted: Duration::from_secs_f32(0.35),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
-            range: 30.,
-            hitbox: vec![Collider::circle(5.)],
+            range: 10.,
+            hitbox: vec![Collider::circle(3.5)],
             hitbox_duration: Duration::from_secs_f32(10.),
             movement: Some(axis2d),
             marker: Some(AttackMarker::TriggersMark),

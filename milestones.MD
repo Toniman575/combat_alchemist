@@ -10,7 +10,7 @@
 
     - [x] Healthbars
     - [x] Refine combat
-    - [ ] Basic Sprites
+    - [x] Basic Sprites
     - [ ] Weapon Animations
     - [ ] Basic Sound
     - [ ] Mobile controls
