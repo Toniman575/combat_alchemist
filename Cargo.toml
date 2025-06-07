@@ -1,5 +1,5 @@
 [package]
-name = "combat_alchemist"
+name = "combat-alchemist"
 version = "0.1.0"
 edition = "2024"
 

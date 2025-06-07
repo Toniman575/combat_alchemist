@@ -8,14 +8,16 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
+    AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving,
+    SpriteAssets, ZLayer,
     player::{
         combat::{
             animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
             triggers_mark_collision,
         },
         input::{binding, button_system, update_joystick, update_looking_direction},
-        movement::{apply_velocity, stop_velocity, weapon_follow, LookingDirection},
-    }, AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving, SpriteAssets, ZLayer
+        movement::{LookingDirection, apply_velocity, stop_velocity, weapon_follow},
+    },
 };
 
 pub(super) use crate::player::combat::AppliesMark;

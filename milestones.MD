@@ -13,7 +13,7 @@
     - [x] Basic Sprites
     - [x] Weapon Animations
     - [ ] Basic Sound
-    - [ ] Mobile controls
+    - [x] Mobile controls
     - [ ] itch.io workflow for playtesting
 
 ### Milestone 3
