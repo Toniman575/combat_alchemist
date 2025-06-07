@@ -10,3 +10,4 @@
 - Refine attack movement and attack hitboxes. Look at bevy_lookup_curve and maybe bevy tween?
 - Refactor main.rs.
 - Figure out if zlayer transform affects collisions?
+- Joystick input kinda scuffed.

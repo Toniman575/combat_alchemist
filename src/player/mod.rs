@@ -8,21 +8,22 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    AssetState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving, SpriteAssets,
-    ZLayer,
     player::{
         combat::{
             animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
             triggers_mark_collision,
         },
-        input::binding,
-        movement::{apply_velocity, stop_velocity, weapon_follow},
-    },
+        input::{binding, button_system, update_joystick, update_looking_direction},
+        movement::{apply_velocity, stop_velocity, weapon_follow, LookingDirection},
+    }, AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving, SpriteAssets, ZLayer
 };
 
 pub(super) use crate::player::combat::AppliesMark;
 pub(super) use crate::player::combat::AttackMarker;
 pub(super) use crate::player::combat::TriggersMark;
+pub(super) use crate::player::input::Button1;
+pub(super) use crate::player::input::Button2;
+pub(super) use crate::player::input::JoystickID;
 
 #[cfg(debug_assertions)]
 use crate::player::combat::{Mark, Swinging};
@@ -41,14 +42,21 @@ impl Plugin for PlayerPlugin {
             .add_systems(OnEnter(AssetState::Loaded), startup)
             .add_systems(
                 Update,
-                (triggers_mark_collision, weapon_follow, animate_swing)
+                (
+                    triggers_mark_collision,
+                    weapon_follow,
+                    animate_swing,
+                    update_looking_direction.run_if(in_state(CursorState::Mouse)),
+                    (update_joystick, button_system).run_if(in_state(CursorState::Touch)),
+                )
                     .run_if(in_state(GameState::Running)),
             );
 
         #[cfg(debug_assertions)]
         app.register_type::<Player>()
             .register_type::<Mark>()
-            .register_type::<Swinging>();
+            .register_type::<Swinging>()
+            .register_type::<LookingDirection>();
     }
 }
 
@@ -62,6 +70,7 @@ impl Plugin for PlayerPlugin {
     Actions::<InGame>,
     Transform::from_xyz(0., 0., ZLayer::Player.z_layer()),
     Moving,
+    LookingDirection
 )]
 pub struct Player {
     speed: f32,

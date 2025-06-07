@@ -1,13 +1,15 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
-use bevy_cursor::CursorLocation;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
     Moving, ZLayer,
     player::{Player, WeaponSprite, combat::Swinging, input::MovePlayer},
 };
+
+#[derive(Component, Reflect, Default, Deref, DerefMut)]
+pub(super) struct LookingDirection(pub(super) Vec2);
 
 pub(super) fn apply_velocity(
     trigger: Trigger<Fired<MovePlayer>>,
@@ -24,25 +26,21 @@ pub(super) fn stop_velocity(
 }
 
 pub(super) fn weapon_follow(
-    cursor: Res<CursorLocation>,
-    player: Single<&Transform, With<Player>>,
+    player: Single<(&Transform, &LookingDirection), With<Player>>,
     mut weapon: Single<&mut Transform, (With<WeaponSprite>, (Without<Player>, Without<Swinging>))>,
     time: Res<Time<Virtual>>,
 ) {
     let target =
-        &(player.translation.xy() + Vec2::new(5.0, 5.0)).extend(ZLayer::PlayerWeapon.z_layer());
-
+        &(player.0.translation.xy() + Vec2::new(5.0, 5.0)).extend(ZLayer::PlayerWeapon.z_layer());
     weapon
         .translation
         .smooth_nudge(target, 10., time.delta_secs());
 
-    let Some(cursor_pos) = cursor.world_position() else {
-        return;
-    };
-
     let target_rotation = Quat::from_rotation_arc(
         Vec3::Y,
-        (cursor_pos - target.truncate()).normalize().extend(0.),
+        ((player.1.0 * 100. + player.0.translation.truncate()) - target.truncate())
+            .normalize()
+            .extend(0.),
     );
     weapon
         .rotation

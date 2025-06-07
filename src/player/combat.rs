@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use avian2d::prelude::*;
 use bevy::{platform::collections::HashSet, prelude::*, time::Stopwatch};
-use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 use bevy_enoki::{ParticleEffectHandle, ParticleSpawner, prelude::OneShot};
 
@@ -11,7 +10,7 @@ use crate::{
     ParticleEffects, Rooted, SpriteAssets, ZLayer,
     enemy::{Enemy, FollowedBy, Following},
     player::{
-        Player, WeaponSprite,
+        LookingDirection, Player, WeaponSprite,
         input::{MovePlayer, PrimaryAttack, SecondaryAttack},
     },
 };
@@ -107,17 +106,15 @@ pub(super) fn triggers_mark_collision(
 
 pub(super) fn primary_attack(
     _: Trigger<Fired<PrimaryAttack>>,
-    cursor_pos: Res<CursorLocation>,
-    player: Single<(Entity, &Transform, &Actions<InGame>), (With<Player>, Without<Attacking>)>,
+    player: Single<
+        (Entity, &Transform, &Actions<InGame>, &LookingDirection),
+        (With<Player>, Without<Attacking>),
+    >,
     player_weapon: Single<(Entity, &Transform), With<WeaponSprite>>,
     mut commands: Commands,
 ) {
-    let Some(cursor_pos) = cursor_pos.world_position() else {
-        return;
-    };
-    let (player_entity, player_transform, current_movement) = player.into_inner();
+    let (player_entity, player_transform, current_movement, direction_vector) = player.into_inner();
     let player_pos = player_transform.translation.xy();
-    let direction_vector = cursor_pos - player_pos;
 
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 
@@ -172,17 +169,14 @@ pub(super) fn primary_attack(
 
 pub(super) fn secondary_attack(
     _: Trigger<Fired<SecondaryAttack>>,
-    cursor_pos: Res<CursorLocation>,
-    player: Single<(Entity, &Transform, &Actions<InGame>), (With<Player>, Without<Attacking>)>,
+    player: Single<
+        (Entity, &Actions<InGame>, &LookingDirection),
+        (With<Player>, Without<Attacking>),
+    >,
     mut commands: Commands,
     sprite_assets: Res<SpriteAssets>,
 ) {
-    let Some(cursor_pos) = cursor_pos.world_position() else {
-        return;
-    };
-    let (player_entity, player_transform, current_movement) = player.into_inner();
-    let player_pos = player_transform.translation.xy();
-    let direction_vector = cursor_pos - player_pos;
+    let (player_entity, current_movement, direction_vector) = player.into_inner();
 
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 

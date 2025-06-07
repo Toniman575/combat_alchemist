@@ -1,6 +1,7 @@
 mod camera;
 mod enemy;
 mod player;
+mod touch;
 
 use std::time::Duration;
 
@@ -8,7 +9,7 @@ use avian2d::{
     math::{AdjustPrecision, Scalar},
     prelude::*,
 };
-use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch};
+use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch, window::WindowResolution};
 use bevy_asset_loader::prelude::*;
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
@@ -16,11 +17,13 @@ use bevy_enoki::{EnokiPlugin, Particle2dEffect};
 #[cfg(debug_assertions)]
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use rand::random;
+use virtual_joystick::VirtualJoystickPlugin;
 
 use crate::{
     camera::CameraPlugin,
     enemy::{Enemy, EnemyPlugin},
-    player::{AppliesMark, AttackMarker, Player, PlayerPlugin, TriggersMark},
+    player::{AppliesMark, AttackMarker, JoystickID, Player, PlayerPlugin, TriggersMark},
+    touch::touch_interface,
 };
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
@@ -36,6 +39,14 @@ enum GameState {
     Paused,
     #[default]
     Running,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
+#[states(scoped_entities)]
+enum CursorState {
+    #[default]
+    Mouse,
+    Touch,
 }
 
 enum ZLayer {
@@ -66,10 +77,16 @@ struct SpriteAssets {
     bite: Handle<Image>,
     #[asset(path = "sprites/enemy.png")]
     enemy: Handle<Image>,
+    #[asset(path = "sprites/knob.png")]
+    knob: Handle<Image>,
+    #[asset(path = "sprites/outline.png")]
+    outline: Handle<Image>,
     #[asset(path = "sprites/player.png")]
     player: Handle<Image>,
+
     #[asset(path = "sprites/potion.png")]
     potion: Handle<Image>,
+
     #[asset(path = "sprites/staff.png")]
     staff: Handle<Image>,
 }
@@ -175,6 +192,7 @@ fn main() -> AppExit {
                 primary_window: Window {
                     title: "Bevy New 2D".to_string(),
                     fit_canvas_to_parent: true,
+                    resolution: WindowResolution::default().with_scale_factor_override(1.0),
                     ..default()
                 }
                 .into(),
@@ -183,10 +201,12 @@ fn main() -> AppExit {
         EnokiPlugin,
         TrackCursorPlugin,
         EnhancedInputPlugin,
+        VirtualJoystickPlugin::<JoystickID>::default(),
         PhysicsPlugins::default().with_length_unit(2.5),
         PhysicsPickingPlugin,
     ))
     .init_state::<AssetState>()
+    .init_state::<CursorState>()
     .add_loading_state(
         LoadingState::new(AssetState::Loading)
             .continue_to_state(AssetState::Loaded)
@@ -201,6 +221,7 @@ fn main() -> AppExit {
     .add_observer(binding)
     .add_observer(pause_game)
     .add_systems(OnEnter(AssetState::Loaded), startup)
+    .add_systems(OnEnter(CursorState::Touch), touch_interface)
     .add_systems(
         Update,
         (
@@ -210,6 +231,7 @@ fn main() -> AppExit {
             tick_attack_timer,
             attacking_movement,
             tick_rooted,
+            check_input_state,
         )
             .run_if(in_state(GameState::Running)),
     );
@@ -522,5 +544,17 @@ pub(crate) fn update_healthbar(
                 }
             }
         }
+    }
+}
+
+fn check_input_state(
+    cursor: Res<CursorLocation>,
+    touch: Res<Touches>,
+    mut next_input_state: ResMut<NextState<CursorState>>,
+) {
+    if cursor.get().is_some() {
+        next_input_state.set(CursorState::Mouse);
+    } else if touch.any_just_pressed() {
+        next_input_state.set(CursorState::Touch)
     }
 }
