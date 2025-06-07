@@ -308,7 +308,6 @@ fn tick_attack_timer(
                 attacking.hitbox.pop().unwrap(),
                 Sensor,
                 new_transform,
-                CollisionEventsEnabled,
                 AttackHitBoxTimer(Timer::new(attacking.hitbox_duration, TimerMode::Once)),
                 layer,
             ));
@@ -329,8 +328,10 @@ fn tick_attack_timer(
                     TransformInterpolation,
                     LinearVelocity(hitbox_movement * 80.),
                     RigidBody::Kinematic,
+                    CollidingEntities::default(),
                 ));
             } else {
+                child_entity_commands.insert(CollisionEventsEnabled);
                 let child_entity = child_entity_commands.id();
                 commands.entity(entity).add_child(child_entity);
             }

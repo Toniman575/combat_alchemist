@@ -38,11 +38,11 @@ impl Plugin for PlayerPlugin {
             .add_observer(secondary_attack)
             .add_observer(apply_mark)
             .add_observer(trigger_mark)
-            .add_observer(triggers_mark_collision)
             .add_systems(OnEnter(AssetState::Loaded), startup)
             .add_systems(
                 Update,
-                (weapon_follow, animate_swing).run_if(in_state(GameState::Running)),
+                (triggers_mark_collision, weapon_follow, animate_swing)
+                    .run_if(in_state(GameState::Running)),
             );
 
         #[cfg(debug_assertions)]

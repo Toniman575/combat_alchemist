@@ -71,30 +71,33 @@ pub(super) fn apply_mark(
 }
 
 pub(super) fn triggers_mark_collision(
-    trigger: Trigger<OnCollisionStart>,
     mut commands: Commands,
-    trigger_entity: Query<Entity, With<TriggersMark>>,
+    colliding_q: Query<(Entity, &mut CollidingEntities), With<TriggersMark>>,
     enemy_q: Query<Option<&FollowedBy>, With<Enemy>>,
 ) {
-    let Ok(has_mark) = enemy_q.get(trigger.collider) else {
-        return;
-    };
-
-    let target_entity = trigger.target();
-
-    if !trigger_entity.contains(target_entity) {
-        return;
-    }
-
-    if let Some(followed_by) = has_mark {
-        for entity in followed_by.iter() {
-            let mut entities = HashSet::new();
-            entities.insert(entity);
-            commands.entity(entity).trigger(TriggerMark(entities));
-            commands.entity(target_entity).despawn();
+    for (entity, mut colliding_entites) in colliding_q {
+        if colliding_entites.is_empty() {
+            continue;
         }
-    } else {
-        commands.entity(target_entity).despawn();
+
+        for colliding_entity in colliding_entites.drain() {
+            let Ok(followed_by) = enemy_q.get(colliding_entity) else {
+                continue;
+            };
+
+            if let Some(followed_by) = followed_by {
+                for following_entity in followed_by.iter() {
+                    let mut entities = HashSet::new();
+                    entities.insert(following_entity);
+                    commands
+                        .entity(following_entity)
+                        .trigger(TriggerMark(entities));
+                    commands.entity(entity).despawn();
+                }
+                return;
+            }
+        }
+        commands.entity(entity).despawn();
     }
 }
 
@@ -254,10 +257,10 @@ pub(super) fn trigger_mark(
     }
 
     commands.entity(trigger_entity_following).remove::<Mark>();
-    query_mark
-        .get_mut(trigger_entity_following)
-        .unwrap()
-        .current -= 10;
+    if let Ok(mut health) = query_mark.get_mut(trigger_entity_following) {
+        health.current -= 10;
+    }
+
     commands.entity(trigger_entity).despawn();
 }
 
