@@ -32,6 +32,7 @@ bevy = { version = "0.16", default-features = false, features = [
 bevy_asset_loader = "0.23"
 bevy_cursor = { version = "0.6", features = ["2d"] }
 bevy_enhanced_input = "0.12"
+bevy_enoki = "0.4"
 bevy-inspector-egui = { version = "0.31", default-features = false, features = [
   "bevy_render",
 ] }

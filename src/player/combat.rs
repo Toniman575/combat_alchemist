@@ -4,10 +4,11 @@ use avian2d::prelude::*;
 use bevy::{platform::collections::HashSet, prelude::*, time::Stopwatch};
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
+use bevy_enoki::{ParticleEffectHandle, ParticleSpawner, prelude::OneShot};
 
 use crate::{
-    AttackMovement, AttackMovements, Attacking, GameCollisionLayer, Health, InGame, Moving, Rooted,
-    SpriteAssets, ZLayer,
+    AttackMovement, AttackMovements, Attacking, GameCollisionLayer, Health, InGame, Moving,
+    ParticleEffects, Rooted, SpriteAssets, ZLayer,
     enemy::{Enemy, FollowedBy, Following},
     player::{
         Player, WeaponSprite,
@@ -48,6 +49,7 @@ pub(super) fn apply_mark(
     mut commands: Commands,
     trigger_entity: Query<Entity, With<AppliesMark>>,
     enemy_q: Query<Entity, (With<Enemy>, Without<Mark>)>,
+    effect_assets: Res<ParticleEffects>,
 ) {
     let Ok(enemy_entity) = enemy_q.get(trigger.collider) else {
         return;
@@ -67,6 +69,8 @@ pub(super) fn apply_mark(
         Following::new(enemy_entity),
         Pickable::IGNORE,
         CollidingEntities::default(),
+        ParticleSpawner::default(),
+        ParticleEffectHandle(effect_assets.mark.clone_weak()),
     ));
 }
 
@@ -126,7 +130,7 @@ pub(super) fn primary_attack(
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 20.,
-            hitbox: vec![Collider::rectangle(2., 15.)],
+            hitbox: vec![Collider::rectangle(4., 18.)],
             hitbox_duration: Duration::from_secs_f32(0.1),
             marker: Some(AttackMarker::AppliesMark),
             sprite: None,
@@ -223,8 +227,9 @@ pub(super) fn trigger_mark(
     trigger: Trigger<TriggerMark>,
     mut colliding_entities: Query<&mut CollidingEntities>,
     colliders: Query<(Entity, &Following), With<Sensor>>,
-    mut query_mark: Query<&mut Health, With<Mark>>,
+    mut query_mark: Query<(&Transform, &mut Health), With<Mark>>,
     mut commands: Commands,
+    effect_assets: Res<ParticleEffects>,
 ) {
     let trigger_entity = trigger.target();
     if commands.get_entity(trigger_entity).is_err() {
@@ -257,8 +262,14 @@ pub(super) fn trigger_mark(
     }
 
     commands.entity(trigger_entity_following).remove::<Mark>();
-    if let Ok(mut health) = query_mark.get_mut(trigger_entity_following) {
+    if let Ok((transform, mut health)) = query_mark.get_mut(trigger_entity_following) {
         health.current -= 10;
+        commands.spawn((
+            ParticleSpawner::default(),
+            ParticleEffectHandle(effect_assets.trigger.clone_weak()),
+            OneShot::Despawn,
+            *transform,
+        ));
     }
 
     commands.entity(trigger_entity).despawn();

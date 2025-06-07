@@ -1,6 +1,5 @@
 ### Urgent
 
-- Marker and trigger effects
 - Basic sound
 
 ### Later

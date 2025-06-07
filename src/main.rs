@@ -12,6 +12,7 @@ use bevy::{asset::AssetMetaCheck, prelude::*, time::Stopwatch};
 use bevy_asset_loader::prelude::*;
 use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
+use bevy_enoki::{EnokiPlugin, Particle2dEffect};
 #[cfg(debug_assertions)]
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use rand::random;
@@ -71,6 +72,14 @@ struct SpriteAssets {
     potion: Handle<Image>,
     #[asset(path = "sprites/staff.png")]
     staff: Handle<Image>,
+}
+
+#[derive(AssetCollection, Resource)]
+struct ParticleEffects {
+    #[asset(path = "effects/mark.ron")]
+    mark: Handle<Particle2dEffect>,
+    #[asset(path = "effects/trigger.ron")]
+    trigger: Handle<Particle2dEffect>,
 }
 
 #[derive(InputContext)]
@@ -171,6 +180,7 @@ fn main() -> AppExit {
                 .into(),
                 ..default()
             }),
+        EnokiPlugin,
         TrackCursorPlugin,
         EnhancedInputPlugin,
         PhysicsPlugins::default().with_length_unit(2.5),
@@ -180,7 +190,8 @@ fn main() -> AppExit {
     .add_loading_state(
         LoadingState::new(AssetState::Loading)
             .continue_to_state(AssetState::Loaded)
-            .load_collection::<SpriteAssets>(),
+            .load_collection::<SpriteAssets>()
+            .load_collection::<ParticleEffects>(),
     )
     .add_sub_state::<GameState>()
     // My plugins.

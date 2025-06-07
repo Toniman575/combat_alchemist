@@ -747,6 +747,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_enoki"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "740289c63cb752adbad3823c49c01d479d853a10d76ccfe5ce3d1f3ea8e14ac2"
+dependencies = [
+ "bevy",
+ "rand 0.8.5",
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "bevy_gizmos"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1707,6 +1719,7 @@ dependencies = [
  "bevy_asset_loader",
  "bevy_cursor",
  "bevy_enhanced_input",
+ "bevy_enoki",
  "getrandom 0.3.3",
  "log",
  "num-traits",
