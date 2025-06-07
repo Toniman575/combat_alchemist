@@ -25,7 +25,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: wasm32-unkown-unkown
+          targets: wasm32-unknown-unknown
 
       - name: Restore Rust cache
         uses: Swatinem/rust-cache@v2
@@ -46,7 +46,7 @@ jobs:
           bevy build --release --yes web --bundle
 
       - name: Package app
-        run: zip --recurse-paths 'target/bevy_web/web-release/combat-alchemist' 'combat-alchemist.zip'
+        run: zip --recurse-paths 'combat-alchemist.zip' 'target/bevy_web/web-release/combat-alchemist'
 
       - name: Install butler
         run: |
