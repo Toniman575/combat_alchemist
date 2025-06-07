@@ -39,7 +39,7 @@ enum GameState {
 
 enum ZLayer {
     Enemies,
-    EnemiesWeapon,
+    EnemyWeapon,
     HealthBar,
     Map,
     Player,
@@ -50,7 +50,7 @@ impl ZLayer {
     fn z_layer(&self) -> f32 {
         match self {
             ZLayer::Enemies => 2.,
-            ZLayer::EnemiesWeapon => 1.,
+            ZLayer::EnemyWeapon => 1.,
             ZLayer::HealthBar => 1.,
             ZLayer::Map => 0.,
             ZLayer::Player => 3.,
@@ -61,6 +61,8 @@ impl ZLayer {
 
 #[derive(AssetCollection, Resource)]
 struct SpriteAssets {
+    #[asset(path = "sprites/bite.png")]
+    bite: Handle<Image>,
     #[asset(path = "sprites/enemy.png")]
     enemy: Handle<Image>,
     #[asset(path = "sprites/player.png")]
@@ -87,12 +89,31 @@ struct Attacking {
     hitbox_duration: Duration,
     hitbox_movement: Option<Vec2>,
     marker: Option<AttackMarker>,
-    movement: Option<Vec2>,
     range: f32,
-    rooted: Duration,
     spawn_hitbox: Vec<Duration>,
+    sprite: Option<Sprite>,
     stopwatch: Stopwatch,
     target: Vec2,
+}
+
+#[derive(Component, Reflect)]
+struct Rooted {
+    duration: Duration,
+    stopwatch: Stopwatch,
+}
+
+#[derive(Component, Reflect)]
+struct AttackMovements {
+    movements: Vec<(Duration, AttackMovement)>,
+    stopwatch: Stopwatch,
+}
+
+#[derive(Reflect)]
+struct AttackMovement {
+    easing: EaseFunction,
+    end_timing: Duration,
+    from_to: (Vec2, Vec2),
+    speed: f32,
 }
 
 #[derive(Component, Reflect)]
@@ -177,6 +198,7 @@ fn main() -> AppExit {
             kinematic_collisions,
             tick_attack_timer,
             attacking_movement,
+            tick_rooted,
         )
             .run_if(in_state(GameState::Running)),
     );
@@ -191,7 +213,9 @@ fn main() -> AppExit {
     ))
     .register_type::<AttackHitBoxTimer>()
     .register_type::<Health>()
-    .register_type::<HealthBar>();
+    .register_type::<HealthBar>()
+    .register_type::<AttackMovements>()
+    .register_type::<Rooted>();
 
     app.run()
 }
@@ -242,20 +266,27 @@ fn tick_hitbox_timer(
 fn tick_attack_timer(
     mut commands: Commands,
     attacking_q: Query<(Entity, &mut Attacking, &Transform, Has<Enemy>, Has<Player>)>,
-    sprite_assets: Res<SpriteAssets>,
     time: Res<Time<Virtual>>,
 ) {
     for (entity, mut attacking, transform, is_enemy, is_player) in attacking_q {
         attacking.stopwatch.tick(time.delta());
 
-        if let Some(spawn_hitbox_timer) = attacking.spawn_hitbox.last()
-            && *spawn_hitbox_timer <= attacking.stopwatch.elapsed()
-        {
+        let Some(spawn_hitbox_timer) = attacking.spawn_hitbox.last() else {
+            commands.entity(entity).remove::<Attacking>();
+            continue;
+        };
+
+        if *spawn_hitbox_timer <= attacking.stopwatch.elapsed() {
             attacking.spawn_hitbox.pop();
 
+            let new_pos = attacking.target * attacking.range;
+            let translation;
+
             let layer = if is_enemy {
+                translation = new_pos.extend(ZLayer::EnemyWeapon.z_layer());
                 GameCollisionLayer::enemy_attack()
             } else if is_player {
+                translation = new_pos.extend(ZLayer::PlayerWeapon.z_layer());
                 GameCollisionLayer::player_attack()
             } else if is_enemy && is_player {
                 panic!("Entity is player and enemy?")
@@ -263,8 +294,7 @@ fn tick_attack_timer(
                 panic!("Entity is neither player nor enemy?")
             };
 
-            let mut new_transform =
-                Transform::from_translation((attacking.target * attacking.range).extend(0.));
+            let mut new_transform = Transform::from_translation(translation);
 
             if attacking.hitbox_movement.is_some() {
                 new_transform.translation += transform.translation;
@@ -283,6 +313,10 @@ fn tick_attack_timer(
                 layer,
             ));
 
+            if let Some(sprite) = &attacking.sprite {
+                child_entity_commands.insert(sprite.clone());
+            }
+
             if let Some(marker) = &attacking.marker {
                 match marker {
                     AttackMarker::AppliesMark => child_entity_commands.insert(AppliesMark),
@@ -295,35 +329,62 @@ fn tick_attack_timer(
                     TransformInterpolation,
                     LinearVelocity(hitbox_movement * 80.),
                     RigidBody::Kinematic,
-                    Sprite {
-                        image: sprite_assets.potion.clone(),
-                        custom_size: Some(Vec2::new(7., 7.)),
-                        ..default()
-                    },
                 ));
             } else {
                 let child_entity = child_entity_commands.id();
                 commands.entity(entity).add_child(child_entity);
             }
         }
+    }
+}
 
-        if attacking.rooted <= attacking.stopwatch.elapsed() {
-            commands.entity(entity).remove::<Attacking>().insert(Moving);
+fn tick_rooted(
+    rooted_q: Query<(Entity, &mut Rooted)>,
+    mut commands: Commands,
+    time: Res<Time<Virtual>>,
+) {
+    let delta = time.delta();
+    for (entity, mut rooted) in rooted_q {
+        rooted.stopwatch.tick(delta);
+
+        if rooted.stopwatch.elapsed() >= rooted.duration {
+            commands.entity(entity).remove::<Rooted>().insert(Moving);
         }
     }
 }
 
-fn attacking_movement(vel_q: Query<(&mut LinearVelocity, &Attacking)>) {
-    for (mut lin_vel, attacking) in vel_q {
-        let Some(movement) = attacking.movement else {
-            lin_vel.set_if_neq(LinearVelocity::ZERO);
+fn attacking_movement(
+    vel_q: Query<(Entity, &mut LinearVelocity, &mut AttackMovements)>,
+    mut commands: Commands,
+    time: Res<Time<Virtual>>,
+) {
+    let delta = time.delta();
+
+    for (entity, mut lin_vel, mut attack_movement) in vel_q {
+        attack_movement.stopwatch.tick(delta);
+        let elapsed = attack_movement.stopwatch.elapsed();
+
+        let Some((start, movement)) = attack_movement.movements.last() else {
+            commands.entity(entity).remove::<AttackMovements>();
             continue;
         };
 
-        let t = (attacking.stopwatch.elapsed_secs() / attacking.rooted.as_secs_f32()).clamp(0., 1.);
-        lin_vel.set_if_neq(LinearVelocity(
-            movement.lerp(Vec2::ZERO, EaseFunction::QuarticOut.sample(t).unwrap()) * 50.,
-        ));
+        if start >= &elapsed {
+            continue;
+        }
+
+        if movement.end_timing >= elapsed {
+            let t = (attack_movement.stopwatch.elapsed_secs() / movement.end_timing.as_secs_f32())
+                .clamp(0., 1.);
+            lin_vel.set_if_neq(LinearVelocity(
+                movement.from_to.0.lerp(
+                    movement.from_to.1,
+                    EaseFunction::QuarticOut.sample(t).unwrap(),
+                ) * 50.,
+            ));
+        } else {
+            attack_movement.movements.pop();
+        }
     }
 }
 

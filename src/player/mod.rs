@@ -8,7 +8,8 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    AssetState, GameCollisionLayer, Health, HealthBar, InGame, Moving, SpriteAssets, ZLayer,
+    AssetState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving, SpriteAssets,
+    ZLayer,
     player::{
         combat::{
             animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
@@ -39,7 +40,10 @@ impl Plugin for PlayerPlugin {
             .add_observer(trigger_mark)
             .add_observer(triggers_mark_collision)
             .add_systems(OnEnter(AssetState::Loaded), startup)
-            .add_systems(Update, (weapon_follow, animate_swing));
+            .add_systems(
+                Update,
+                (weapon_follow, animate_swing).run_if(in_state(GameState::Running)),
+            );
 
         #[cfg(debug_assertions)]
         app.register_type::<Player>()

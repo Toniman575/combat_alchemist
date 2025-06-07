@@ -4,8 +4,8 @@ use avian2d::prelude::*;
 use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatch};
 
 use crate::{
-    AssetState, Attacking, GameCollisionLayer, GameState, Health, HealthBar, Moving, SpriteAssets,
-    ZLayer, player::Player,
+    AssetState, Attacking, GameCollisionLayer, GameState, Health, HealthBar, Moving, Rooted,
+    SpriteAssets, ZLayer, player::Player,
 };
 
 pub(super) struct EnemyPlugin;
@@ -58,7 +58,7 @@ impl Enemy {
                 max: health,
             },
             Sprite {
-                image: sprite_assets.enemy.clone(),
+                image: sprite_assets.enemy.clone_weak(),
                 anchor: Anchor::Custom(Vec2::new(0., -0.1)),
                 custom_size: Some(Vec2::new(20., 20.)),
                 ..default()
@@ -136,9 +136,10 @@ fn move_enemies(
     mut commands: Commands,
     enemy_q: Query<
         (Entity, &mut LinearVelocity, &Transform, &Enemy),
-        (With<Moving>, Without<Attacking>),
+        (With<Moving>, Without<Rooted>),
     >,
     player: Single<&Transform, With<Player>>,
+    sprite_assets: Res<SpriteAssets>,
 ) {
     for (enemy_entity, mut vel, enemy_transform, enemy) in enemy_q {
         let normalized_direction_vector =
@@ -150,21 +151,26 @@ fn move_enemies(
             new_transform.rotation =
                 Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
 
-            commands
-                .entity(enemy_entity)
-                .remove::<Moving>()
-                .insert(Attacking {
+            commands.entity(enemy_entity).remove::<Moving>().insert((
+                Attacking {
                     hitbox_movement: None,
                     target: normalized_direction_vector,
-                    rooted: Duration::from_secs_f32(0.5),
                     spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
                     stopwatch: Stopwatch::new(),
                     range: 25.,
                     hitbox: vec![Collider::rectangle(15., 15.)],
                     hitbox_duration: Duration::from_secs_f32(0.1),
-                    movement: None,
                     marker: None,
-                });
+                    sprite: Some(Sprite {
+                        image: sprite_assets.bite.clone_weak(),
+                        ..default()
+                    }),
+                },
+                Rooted {
+                    duration: Duration::from_secs_f32(0.5),
+                    stopwatch: Stopwatch::new(),
+                },
+            ));
             vel.set_if_neq(LinearVelocity::ZERO);
 
             continue;

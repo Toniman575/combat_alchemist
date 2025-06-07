@@ -6,7 +6,8 @@ use bevy_cursor::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    Attacking, GameCollisionLayer, Health, InGame, Moving, ZLayer,
+    AttackMovement, AttackMovements, Attacking, GameCollisionLayer, Health, InGame, Moving, Rooted,
+    SpriteAssets, ZLayer,
     enemy::{Enemy, FollowedBy, Following},
     player::{
         Player, WeaponSprite,
@@ -114,21 +115,36 @@ pub(super) fn primary_attack(
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 
     let axis2d = current_movement.value::<MovePlayer>().unwrap().as_axis2d();
-    commands
-        .entity(player_entity)
-        .remove::<Moving>()
-        .insert(Attacking {
+    let rooted_duration = Duration::from_secs_f32(0.35);
+    commands.entity(player_entity).remove::<Moving>().insert((
+        Attacking {
             target: normalized_direction_vector,
             hitbox_movement: None,
-            rooted: Duration::from_secs_f32(0.35),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 20.,
             hitbox: vec![Collider::rectangle(2., 15.)],
             hitbox_duration: Duration::from_secs_f32(0.1),
-            movement: Some(axis2d),
             marker: Some(AttackMarker::AppliesMark),
-        });
+            sprite: None,
+        },
+        AttackMovements {
+            movements: vec![(
+                Duration::ZERO,
+                AttackMovement {
+                    easing: EaseFunction::QuarticOut,
+                    speed: 50.,
+                    from_to: (axis2d, Vec2::ZERO),
+                    end_timing: rooted_duration,
+                },
+            )],
+            stopwatch: Stopwatch::new(),
+        },
+        Rooted {
+            duration: rooted_duration,
+            stopwatch: Stopwatch::new(),
+        },
+    ));
 
     let mut transform = Transform::from_translation(
         (player_pos + normalized_direction_vector * 20.).extend(ZLayer::PlayerWeapon.z_layer()),
@@ -152,6 +168,7 @@ pub(super) fn secondary_attack(
     cursor_pos: Res<CursorLocation>,
     player: Single<(Entity, &Transform, &Actions<InGame>), (With<Player>, Without<Attacking>)>,
     mut commands: Commands,
+    sprite_assets: Res<SpriteAssets>,
 ) {
     let Some(cursor_pos) = cursor_pos.world_position() else {
         return;
@@ -163,21 +180,40 @@ pub(super) fn secondary_attack(
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 
     let axis2d = current_movement.value::<MovePlayer>().unwrap().as_axis2d();
-    commands
-        .entity(player_entity)
-        .remove::<Moving>()
-        .insert(Attacking {
+    let rooted_duration = Duration::from_secs_f32(0.35);
+    commands.entity(player_entity).remove::<Moving>().insert((
+        Attacking {
             target: normalized_direction_vector,
             hitbox_movement: Some(normalized_direction_vector),
-            rooted: Duration::from_secs_f32(0.35),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 10.,
             hitbox: vec![Collider::circle(3.5)],
             hitbox_duration: Duration::from_secs_f32(10.),
-            movement: Some(axis2d),
             marker: Some(AttackMarker::TriggersMark),
-        });
+            sprite: Some(Sprite {
+                image: sprite_assets.potion.clone_weak(),
+                custom_size: Some(Vec2::new(7., 7.)),
+                ..default()
+            }),
+        },
+        AttackMovements {
+            movements: vec![(
+                Duration::ZERO,
+                AttackMovement {
+                    easing: EaseFunction::QuarticOut,
+                    speed: 50.,
+                    from_to: (axis2d, Vec2::ZERO),
+                    end_timing: rooted_duration,
+                },
+            )],
+            stopwatch: Stopwatch::new(),
+        },
+        Rooted {
+            duration: rooted_duration,
+            stopwatch: Stopwatch::new(),
+        },
+    ));
 }
 
 pub(super) fn trigger_mark(
@@ -192,8 +228,13 @@ pub(super) fn trigger_mark(
         return;
     }
 
-    let trigger_entity_following = colliders.get(trigger_entity).unwrap().1.following();
-    let mut binding = colliding_entities.get_mut(trigger_entity).unwrap();
+    let Ok(collider) = colliders.get(trigger_entity) else {
+        return;
+    };
+    let trigger_entity_following = collider.1.following();
+    let Ok(mut binding) = colliding_entities.get_mut(trigger_entity) else {
+        return;
+    };
     let mut already_triggered_entities = trigger.0.clone();
     let mut entities_being_triggered_now = binding.clone();
     already_triggered_entities.extend(entities_being_triggered_now.drain());

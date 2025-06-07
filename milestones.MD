@@ -11,7 +11,7 @@
     - [x] Healthbars
     - [x] Refine combat
     - [x] Basic Sprites
-    - [ ] Weapon Animations
+    - [x] Weapon Animations
     - [ ] Basic Sound
     - [ ] Mobile controls
     - [ ] itch.io workflow for playtesting
