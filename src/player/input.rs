@@ -1,7 +1,4 @@
-use bevy::{
-    color::palettes::css::{BLACK, WHITE},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use bevy_cursor::CursorLocation;
 use bevy_enhanced_input::prelude::*;
@@ -17,19 +14,14 @@ pub(super) struct PrimaryAttack;
 #[input_action(output = bool)]
 pub(super) struct SecondaryAttack;
 
-#[derive(Component, Reflect)]
-pub(crate) struct Button1;
-
-#[derive(Component, Reflect)]
-pub(crate) struct Button2;
-
 #[derive(Debug, InputAction)]
 #[input_action(output = Vec2)]
 pub(crate) struct MovePlayer;
 
 #[derive(Default, Debug, Reflect, Hash, Clone, PartialEq, Eq)]
 pub(crate) enum JoystickID {
-    LookingDirection,
+    Button1,
+    Button2,
     #[default]
     Movement,
 }
@@ -81,59 +73,34 @@ pub(super) fn update_joystick(
                 fired_secs: 0.,
                 elapsed_secs: 0.,
             }),
-            JoystickID::LookingDirection => {
-                let Some(delta) = joystick_events.axis().try_normalize() else {
-                    continue;
+            JoystickID::Button1 => {
+                if let Some(delta) = joystick_events.axis().try_normalize() {
+                    player.0 = delta;
                 };
 
-                player.0 = delta;
-            }
-        }
-    }
-}
-
-pub(super) fn button_system(
-    mut commands: Commands,
-    mut button_q: Query<
-        (
-            &Interaction,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            Has<Button1>,
-            Has<Button2>,
-        ),
-        (Changed<Interaction>, With<Button>),
-    >,
-) {
-    for (interaction, mut color, mut border_color, button_1, button_2) in &mut button_q {
-        match *interaction {
-            Interaction::Pressed => {
-                if button_1 {
-                    info!("button1 triggered");
+                if joystick_events.get_type() == virtual_joystick::VirtualJoystickEventType::Up {
                     commands.trigger(Fired::<PrimaryAttack> {
                         value: true,
                         state: ActionState::Fired,
                         fired_secs: 0.,
                         elapsed_secs: 0.,
-                    });
-                } else if button_2 {
-                    info!("button2 triggered");
+                    })
+                }
+            }
+            JoystickID::Button2 => {
+                if let Some(delta) = joystick_events.axis().try_normalize() {
+                    player.0 = delta;
+                };
+
+                if joystick_events.get_type() == virtual_joystick::VirtualJoystickEventType::Up {
                     commands.trigger(Fired::<SecondaryAttack> {
                         value: true,
                         state: ActionState::Fired,
                         fired_secs: 0.,
                         elapsed_secs: 0.,
-                    });
+                    })
                 }
-
-                *color = BLACK.into();
-                border_color.0 = WHITE.into();
             }
-            Interaction::None => {
-                *color = WHITE.into();
-                border_color.0 = BLACK.into();
-            }
-            _ => {}
         }
     }
 }

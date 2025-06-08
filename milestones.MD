@@ -14,7 +14,7 @@
     - [x] Weapon Animations
     - [ ] Basic Sound
     - [x] Mobile controls
-    - [ ] itch.io workflow for playtesting
+    - [x] itch.io workflow for playtesting
 
 ### Milestone 3
 

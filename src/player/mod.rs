@@ -15,7 +15,7 @@ use crate::{
             animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
             triggers_mark_collision,
         },
-        input::{binding, button_system, update_joystick, update_looking_direction},
+        input::{binding, update_joystick, update_looking_direction},
         movement::{LookingDirection, apply_velocity, stop_velocity, weapon_follow},
     },
 };
@@ -23,8 +23,6 @@ use crate::{
 pub(super) use crate::player::combat::AppliesMark;
 pub(super) use crate::player::combat::AttackMarker;
 pub(super) use crate::player::combat::TriggersMark;
-pub(super) use crate::player::input::Button1;
-pub(super) use crate::player::input::Button2;
 pub(super) use crate::player::input::JoystickID;
 
 #[cfg(debug_assertions)]
@@ -49,7 +47,7 @@ impl Plugin for PlayerPlugin {
                     weapon_follow,
                     animate_swing,
                     update_looking_direction.run_if(in_state(CursorState::Mouse)),
-                    (update_joystick, button_system).run_if(in_state(CursorState::Touch)),
+                    update_joystick.run_if(in_state(CursorState::Touch)),
                 )
                     .run_if(in_state(GameState::Running)),
             );
