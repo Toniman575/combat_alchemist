@@ -2,10 +2,11 @@ use std::time::Duration;
 
 use avian2d::prelude::*;
 use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatch};
+use bevy_seedling::{prelude::Volume, sample::SamplePlayer};
 
 use crate::{
-    AssetState, Attacking, GameCollisionLayer, GameState, Health, HealthBar, Moving, Rooted,
-    SpriteAssets, ZLayer, player::Player,
+    AssetState, Attacking, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar, Moving,
+    Rooted, SpriteAssets, ZLayer, player::Player,
 };
 
 pub(super) struct EnemyPlugin;
@@ -140,6 +141,7 @@ fn move_enemies(
     >,
     player: Single<&Transform, With<Player>>,
     sprite_assets: Res<SpriteAssets>,
+    audio_assets: Res<AudioAssets>,
 ) {
     for (enemy_entity, mut vel, enemy_transform, enemy) in enemy_q {
         let normalized_direction_vector =
@@ -151,8 +153,17 @@ fn move_enemies(
             new_transform.rotation =
                 Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
 
+            commands.spawn(
+                SamplePlayer::new(audio_assets.bite_swing.clone_weak())
+                    .with_volume(Volume::Linear(0.5)),
+            );
+
             commands.entity(enemy_entity).remove::<Moving>().insert((
                 Attacking {
+                    swing_sound: Some((
+                        Duration::from_secs_f32(0.25),
+                        audio_assets.bite_swing.clone_weak(),
+                    )),
                     hitbox_movement: None,
                     target: normalized_direction_vector,
                     spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
@@ -165,6 +176,7 @@ fn move_enemies(
                         image: sprite_assets.bite.clone_weak(),
                         ..default()
                     }),
+                    hitbox_sound: Some(audio_assets.bite_impact.clone_weak()),
                 },
                 Rooted {
                     duration: Duration::from_secs_f32(0.5),

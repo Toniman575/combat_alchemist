@@ -16,6 +16,10 @@ use bevy_enhanced_input::prelude::*;
 use bevy_enoki::{EnokiPlugin, Particle2dEffect};
 #[cfg(debug_assertions)]
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+use bevy_seedling::{
+    SeedlingPlugin,
+    sample::{Sample, SamplePlayer},
+};
 use rand::random;
 use virtual_joystick::VirtualJoystickPlugin;
 
@@ -92,11 +96,25 @@ struct SpriteAssets {
 }
 
 #[derive(AssetCollection, Resource)]
-struct ParticleEffects {
+struct ParticleAssets {
     #[asset(path = "effects/mark.ron")]
     mark: Handle<Particle2dEffect>,
     #[asset(path = "effects/trigger.ron")]
     trigger: Handle<Particle2dEffect>,
+}
+
+#[derive(AssetCollection, Resource)]
+struct AudioAssets {
+    #[asset(path = "audio/bite_impact.ogg")]
+    bite_impact: Handle<Sample>,
+    #[asset(path = "audio/bite_swing.ogg")]
+    bite_swing: Handle<Sample>,
+    #[asset(path = "audio/mark_triggered.ogg")]
+    mark_triggered: Handle<Sample>,
+    #[asset(path = "audio/staff_impact.ogg")]
+    staff_impact: Handle<Sample>,
+    #[asset(path = "audio/staff_swing.ogg")]
+    staff_swing: Handle<Sample>,
 }
 
 #[derive(InputContext)]
@@ -114,11 +132,13 @@ struct Attacking {
     hitbox: Vec<Collider>,
     hitbox_duration: Duration,
     hitbox_movement: Option<Vec2>,
+    hitbox_sound: Option<Handle<Sample>>,
     marker: Option<AttackMarker>,
     range: f32,
     spawn_hitbox: Vec<Duration>,
     sprite: Option<Sprite>,
     stopwatch: Stopwatch,
+    swing_sound: Option<(Duration, Handle<Sample>)>,
     target: Vec2,
 }
 
@@ -153,6 +173,9 @@ pub(crate) struct HealthBar;
 
 #[derive(Component, Reflect, DerefMut, Deref)]
 struct AttackHitBoxTimer(Timer);
+
+#[derive(Component, Reflect, DerefMut, Deref)]
+struct HitboxSound(Handle<Sample>);
 
 #[derive(PhysicsLayer, Default)]
 enum GameCollisionLayer {
@@ -198,6 +221,7 @@ fn main() -> AppExit {
                 .into(),
                 ..default()
             }),
+        SeedlingPlugin::default(),
         EnokiPlugin,
         TrackCursorPlugin,
         EnhancedInputPlugin,
@@ -211,7 +235,8 @@ fn main() -> AppExit {
         LoadingState::new(AssetState::Loading)
             .continue_to_state(AssetState::Loaded)
             .load_collection::<SpriteAssets>()
-            .load_collection::<ParticleEffects>(),
+            .load_collection::<ParticleAssets>()
+            .load_collection::<AudioAssets>(),
     )
     .add_sub_state::<GameState>()
     // My plugins.
@@ -220,6 +245,7 @@ fn main() -> AppExit {
     .insert_resource(Gravity::ZERO)
     .add_observer(binding)
     .add_observer(pause_game)
+    .add_observer(spawn_collision_sound)
     .add_systems(OnEnter(AssetState::Loaded), startup)
     .add_systems(OnEnter(CursorState::Touch), touch_interface)
     .add_systems(
@@ -248,7 +274,8 @@ fn main() -> AppExit {
     .register_type::<Health>()
     .register_type::<HealthBar>()
     .register_type::<AttackMovements>()
-    .register_type::<Rooted>();
+    .register_type::<Rooted>()
+    .register_type::<HitboxSound>();
 
     app.run()
 }
@@ -304,6 +331,13 @@ fn tick_attack_timer(
     for (entity, mut attacking, transform, is_enemy, is_player) in attacking_q {
         attacking.stopwatch.tick(time.delta());
 
+        if let Some((duration, sound)) = &attacking.swing_sound
+            && *duration <= attacking.stopwatch.elapsed()
+        {
+            commands.spawn(SamplePlayer::new(sound.clone_weak()));
+            attacking.swing_sound = None;
+        }
+
         let Some(spawn_hitbox_timer) = attacking.spawn_hitbox.last() else {
             commands.entity(entity).remove::<Attacking>();
             continue;
@@ -354,6 +388,10 @@ fn tick_attack_timer(
                     AttackMarker::AppliesMark => child_entity_commands.insert(AppliesMark),
                     AttackMarker::TriggersMark => child_entity_commands.insert(TriggersMark),
                 };
+            }
+
+            if let Some(handle) = &attacking.hitbox_sound {
+                child_entity_commands.insert(HitboxSound(handle.clone_weak()));
             }
 
             if let Some(hitbox_movement) = attacking.hitbox_movement {
@@ -556,5 +594,15 @@ fn check_input_state(
         next_input_state.set(CursorState::Mouse);
     } else if touch.any_just_pressed() {
         next_input_state.set(CursorState::Touch)
+    }
+}
+
+fn spawn_collision_sound(
+    trigger: Trigger<OnCollisionStart>,
+    mut commands: Commands,
+    sound_q: Query<&HitboxSound>,
+) {
+    if let Ok(sound) = sound_q.get(trigger.target()) {
+        commands.spawn(SamplePlayer::new(sound.0.clone_weak()));
     }
 }

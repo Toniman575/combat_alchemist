@@ -12,7 +12,7 @@
     - [x] Refine combat
     - [x] Basic Sprites
     - [x] Weapon Animations
-    - [ ] Basic Sound
+    - [x] Basic Sound
     - [x] Mobile controls
     - [x] itch.io workflow for playtesting
 

@@ -4,10 +4,11 @@ use avian2d::prelude::*;
 use bevy::{platform::collections::HashSet, prelude::*, time::Stopwatch};
 use bevy_enhanced_input::prelude::*;
 use bevy_enoki::{ParticleEffectHandle, ParticleSpawner, prelude::OneShot};
+use bevy_seedling::sample::SamplePlayer;
 
 use crate::{
-    AttackMovement, AttackMovements, Attacking, GameCollisionLayer, Health, InGame, Moving,
-    ParticleEffects, Rooted, SpriteAssets, ZLayer,
+    AttackMovement, AttackMovements, Attacking, AudioAssets, GameCollisionLayer, Health, InGame,
+    Moving, ParticleAssets, Rooted, SpriteAssets, ZLayer,
     enemy::{Enemy, FollowedBy, Following},
     player::{
         LookingDirection, Player, WeaponSprite,
@@ -48,7 +49,7 @@ pub(super) fn apply_mark(
     mut commands: Commands,
     trigger_entity: Query<Entity, With<AppliesMark>>,
     enemy_q: Query<Entity, (With<Enemy>, Without<Mark>)>,
-    effect_assets: Res<ParticleEffects>,
+    effect_assets: Res<ParticleAssets>,
 ) {
     let Ok(enemy_entity) = enemy_q.get(trigger.collider) else {
         return;
@@ -58,25 +59,26 @@ pub(super) fn apply_mark(
         return;
     }
 
-    commands.entity(enemy_entity).insert(Mark);
+    commands.entity(enemy_entity).insert((Mark,));
 
-    commands.spawn((
+    commands.spawn(((
         Collider::circle(50.),
         Sensor,
         GameCollisionLayer::mark(),
-        Transform::from_xyz(0., 0., 0.),
+        Transform::from_xyz(0., 0., 10.),
         Following::new(enemy_entity),
         Pickable::IGNORE,
         CollidingEntities::default(),
         ParticleSpawner::default(),
         ParticleEffectHandle(effect_assets.mark.clone_weak()),
-    ));
+    ),));
 }
 
 pub(super) fn triggers_mark_collision(
     mut commands: Commands,
     colliding_q: Query<(Entity, &mut CollidingEntities), With<TriggersMark>>,
     enemy_q: Query<Option<&FollowedBy>, With<Enemy>>,
+    audio_assets: Res<AudioAssets>,
 ) {
     for (entity, mut colliding_entites) in colliding_q {
         if colliding_entites.is_empty() {
@@ -96,6 +98,7 @@ pub(super) fn triggers_mark_collision(
                         .entity(following_entity)
                         .trigger(TriggerMark(entities));
                     commands.entity(entity).despawn();
+                    commands.spawn(SamplePlayer::new(audio_assets.mark_triggered.clone_weak()));
                 }
                 return;
             }
@@ -112,6 +115,7 @@ pub(super) fn primary_attack(
     >,
     player_weapon: Single<(Entity, &Transform), With<WeaponSprite>>,
     mut commands: Commands,
+    audio_assets: Res<AudioAssets>,
 ) {
     let (player_entity, player_transform, current_movement, direction_vector) = player.into_inner();
     let player_pos = player_transform.translation.xy();
@@ -122,6 +126,10 @@ pub(super) fn primary_attack(
     let rooted_duration = Duration::from_secs_f32(0.35);
     commands.entity(player_entity).remove::<Moving>().insert((
         Attacking {
+            swing_sound: Some((
+                Duration::from_secs_f32(0.1),
+                audio_assets.staff_swing.clone_weak(),
+            )),
             target: normalized_direction_vector,
             hitbox_movement: None,
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
@@ -131,6 +139,7 @@ pub(super) fn primary_attack(
             hitbox_duration: Duration::from_secs_f32(0.1),
             marker: Some(AttackMarker::AppliesMark),
             sprite: None,
+            hitbox_sound: Some(audio_assets.staff_impact.clone_weak()),
         },
         AttackMovements {
             movements: vec![(
@@ -184,6 +193,7 @@ pub(super) fn secondary_attack(
     let rooted_duration = Duration::from_secs_f32(0.35);
     commands.entity(player_entity).remove::<Moving>().insert((
         Attacking {
+            swing_sound: None,
             target: normalized_direction_vector,
             hitbox_movement: Some(normalized_direction_vector),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
@@ -197,6 +207,7 @@ pub(super) fn secondary_attack(
                 custom_size: Some(Vec2::new(7., 7.)),
                 ..default()
             }),
+            hitbox_sound: None,
         },
         AttackMovements {
             movements: vec![(
@@ -223,7 +234,7 @@ pub(super) fn trigger_mark(
     colliders: Query<(Entity, &Following), With<Sensor>>,
     mut query_mark: Query<(&Transform, &mut Health), With<Mark>>,
     mut commands: Commands,
-    effect_assets: Res<ParticleEffects>,
+    effect_assets: Res<ParticleAssets>,
 ) {
     let trigger_entity = trigger.target();
     if commands.get_entity(trigger_entity).is_err() {
@@ -258,11 +269,13 @@ pub(super) fn trigger_mark(
     commands.entity(trigger_entity_following).remove::<Mark>();
     if let Ok((transform, mut health)) = query_mark.get_mut(trigger_entity_following) {
         health.current -= 10;
+        let particle_transform =
+            Transform::from_translation(transform.translation.truncate().extend(10.));
         commands.spawn((
             ParticleSpawner::default(),
             ParticleEffectHandle(effect_assets.trigger.clone_weak()),
             OneShot::Despawn,
-            *transform,
+            particle_transform,
         ));
     }
 

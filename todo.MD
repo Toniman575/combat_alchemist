@@ -11,3 +11,7 @@
 - Refactor main.rs.
 - Figure out if zlayer transform affects collisions?
 - Joystick input kinda scuffed.
+- ReadMe:
+  - Asset acknowledgments:
+    - <https://tommusic.itch.io/free-fantasy-200-sfx-pack>
+    - <https://leohpaz.itch.io/minifantasy-dungeon-sfx-pack>
