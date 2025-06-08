@@ -4,8 +4,11 @@ use avian2d::prelude::*;
 use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatch};
 use bevy_seedling::{prelude::Volume, sample::SamplePlayer};
 
+use crate::combat::AttackMovement;
+use crate::combat::Attacking;
+use crate::movement::Moving;
 use crate::{
-    AssetState, Attacking, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar, Moving,
+    AssetState, AttackMovements, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar,
     Rooted, SpriteAssets, ZLayer, player::Player,
 };
 
@@ -147,7 +150,7 @@ fn move_enemies(
         let normalized_direction_vector =
             (player.translation.xy() - enemy_transform.translation.xy()).normalize_or_zero();
 
-        if enemy_transform.translation.distance(player.translation) < 30. {
+        if enemy_transform.translation.distance(player.translation) < 40. {
             let mut new_transform =
                 Transform::from_translation((normalized_direction_vector * 80.).extend(0.));
             new_transform.rotation =
@@ -158,28 +161,41 @@ fn move_enemies(
                     .with_volume(Volume::Linear(0.5)),
             );
 
+            let rooted_duration = Duration::from_secs_f32(1.25);
             commands.entity(enemy_entity).remove::<Moving>().insert((
                 Attacking {
                     swing_sound: Some((
                         Duration::from_secs_f32(0.25),
                         audio_assets.bite_swing.clone_weak(),
                     )),
-                    hitbox_movement: None,
+                    hitbox_movement: Vec::new(),
                     target: normalized_direction_vector,
-                    spawn_hitbox: vec![Duration::from_secs_f32(0.4)],
+                    spawn_hitbox: vec![Duration::from_secs_f32(0.5)],
                     stopwatch: Stopwatch::new(),
                     range: 25.,
                     hitbox: vec![Collider::rectangle(15., 15.)],
-                    hitbox_duration: Duration::from_secs_f32(0.1),
+                    hitbox_duration: vec![Duration::from_secs_f32(0.1)],
                     marker: None,
                     sprite: Some(Sprite {
                         image: sprite_assets.bite.clone_weak(),
                         ..default()
                     }),
-                    hitbox_sound: Some(audio_assets.bite_impact.clone_weak()),
+                    hitbox_sound: vec![audio_assets.bite_impact.clone_weak()],
+                },
+                AttackMovements {
+                    movements: vec![(
+                        Duration::ZERO,
+                        AttackMovement {
+                            easing: EaseFunction::CubicOut,
+                            speed: 100.,
+                            from_to: (normalized_direction_vector, Vec2::ZERO),
+                            duration: Duration::from_secs_f32(0.6),
+                        },
+                    )],
+                    stopwatch: Stopwatch::new(),
                 },
                 Rooted {
-                    duration: Duration::from_secs_f32(0.5),
+                    duration: rooted_duration,
                     stopwatch: Stopwatch::new(),
                 },
             ));

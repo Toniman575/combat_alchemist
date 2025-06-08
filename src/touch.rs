@@ -4,7 +4,8 @@ use virtual_joystick::{
     VirtualJoystickUIBackground, VirtualJoystickUIKnob,
 };
 
-use crate::{CursorState, JoystickID, SpriteAssets};
+use crate::assets::SpriteAssets;
+use crate::{CursorState, JoystickID};
 
 pub(super) fn touch_interface(mut commands: Commands, sprite_assets: Res<SpriteAssets>) {
     commands

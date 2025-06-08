@@ -6,9 +6,12 @@ use bevy_enhanced_input::prelude::*;
 use bevy_enoki::{ParticleEffectHandle, ParticleSpawner, prelude::OneShot};
 use bevy_seedling::sample::SamplePlayer;
 
+use crate::combat::{Attacking, Swing, Swings};
+use crate::player::Moving;
 use crate::{
-    AttackMovement, AttackMovements, Attacking, AudioAssets, GameCollisionLayer, Health, InGame,
-    Moving, ParticleAssets, Rooted, SpriteAssets, ZLayer,
+    AttackMovements, AudioAssets, GameCollisionLayer, Health, InGame, ParticleAssets, Rooted,
+    SpriteAssets, ZLayer,
+    combat::AttackMovement,
     enemy::{Enemy, FollowedBy, Following},
     player::{
         LookingDirection, Player, WeaponSprite,
@@ -33,25 +36,15 @@ pub enum AttackMarker {
 #[derive(Event)]
 pub struct TriggerMark(HashSet<Entity>);
 
-#[derive(Component, Reflect)]
-pub(super) struct Swinging {
-    from: Transform,
-    from_duration: Duration,
-    from_easing: EaseFunction,
-    stopwatch: Stopwatch,
-    to: Transform,
-    to_duration: Duration,
-    to_easing: EaseFunction,
-}
-
 pub(super) fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
     mut commands: Commands,
     trigger_entity: Query<Entity, With<AppliesMark>>,
-    enemy_q: Query<Entity, (With<Enemy>, Without<Mark>)>,
+    enemy_q: Query<(Entity, &Position, &Rotation), (With<Enemy>, Without<Mark>)>,
     effect_assets: Res<ParticleAssets>,
+    collisions: Collisions,
 ) {
-    let Ok(enemy_entity) = enemy_q.get(trigger.collider) else {
+    let Ok((enemy_entity, position, rotation)) = enemy_q.get(trigger.collider) else {
         return;
     };
 
@@ -59,9 +52,26 @@ pub(super) fn apply_mark(
         return;
     }
 
-    commands.entity(enemy_entity).insert((Mark,));
+    commands.entity(enemy_entity).insert(Mark);
 
-    commands.spawn(((
+    let contact_point = &collisions
+        .get(trigger.target(), trigger.body.unwrap())
+        .unwrap()
+        .manifolds
+        .first()
+        .unwrap()
+        .find_deepest_contact()
+        .unwrap()
+        .global_point1(position, rotation);
+
+    commands.spawn((
+        ParticleSpawner::default(),
+        ParticleEffectHandle(effect_assets.apply_mark.clone_weak()),
+        OneShot::Despawn,
+        Transform::from_translation(contact_point.extend(10.)),
+    ));
+
+    commands.spawn((
         Collider::circle(50.),
         Sensor,
         GameCollisionLayer::mark(),
@@ -71,7 +81,7 @@ pub(super) fn apply_mark(
         CollidingEntities::default(),
         ParticleSpawner::default(),
         ParticleEffectHandle(effect_assets.mark.clone_weak()),
-    ),));
+    ));
 }
 
 pub(super) fn triggers_mark_collision(
@@ -109,49 +119,33 @@ pub(super) fn triggers_mark_collision(
 
 pub(super) fn primary_attack(
     _: Trigger<Fired<PrimaryAttack>>,
-    player: Single<
-        (Entity, &Transform, &Actions<InGame>, &LookingDirection),
-        (With<Player>, Without<Attacking>),
-    >,
+    player: Single<(Entity, &Transform, &LookingDirection), (With<Player>, Without<Attacking>)>,
     player_weapon: Single<(Entity, &Transform), With<WeaponSprite>>,
     mut commands: Commands,
     audio_assets: Res<AudioAssets>,
 ) {
-    let (player_entity, player_transform, current_movement, direction_vector) = player.into_inner();
+    let (player_entity, player_transform, direction_vector) = player.into_inner();
     let player_pos = player_transform.translation.xy();
-
     let normalized_direction_vector = direction_vector.normalize_or_zero();
+    let rooted_duration = Duration::from_secs_f32(0.8);
 
-    let axis2d = current_movement.value::<MovePlayer>().unwrap().as_axis2d();
-    let rooted_duration = Duration::from_secs_f32(0.35);
-    commands.entity(player_entity).remove::<Moving>().insert((
+    let mut binding = commands.entity(player_entity);
+    let entity_commands = binding.remove::<Moving>().insert((
         Attacking {
             swing_sound: Some((
                 Duration::from_secs_f32(0.1),
                 audio_assets.staff_swing.clone_weak(),
             )),
             target: normalized_direction_vector,
-            hitbox_movement: None,
+            hitbox_movement: Vec::new(),
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 20.,
             hitbox: vec![Collider::rectangle(4., 18.)],
-            hitbox_duration: Duration::from_secs_f32(0.1),
+            hitbox_duration: vec![Duration::from_secs_f32(0.1)],
             marker: Some(AttackMarker::AppliesMark),
             sprite: None,
-            hitbox_sound: Some(audio_assets.staff_impact.clone_weak()),
-        },
-        AttackMovements {
-            movements: vec![(
-                Duration::ZERO,
-                AttackMovement {
-                    easing: EaseFunction::QuarticOut,
-                    speed: 50.,
-                    from_to: (axis2d, Vec2::ZERO),
-                    end_timing: rooted_duration,
-                },
-            )],
-            stopwatch: Stopwatch::new(),
+            hitbox_sound: vec![audio_assets.staff_impact.clone_weak()],
         },
         Rooted {
             duration: rooted_duration,
@@ -159,19 +153,46 @@ pub(super) fn primary_attack(
         },
     ));
 
+    entity_commands.insert(AttackMovements {
+        movements: vec![
+            (
+                Duration::from_secs_f32(0.28),
+                AttackMovement {
+                    easing: EaseFunction::QuarticOut,
+                    speed: 600.,
+                    from_to: (-normalized_direction_vector, Vec2::ZERO),
+                    duration: Duration::from_secs_f32(0.8),
+                },
+            ),
+            (
+                Duration::ZERO,
+                AttackMovement {
+                    easing: EaseFunction::QuarticOut,
+                    speed: 300.,
+                    from_to: (normalized_direction_vector, Vec2::ZERO),
+                    duration: Duration::from_secs_f32(0.27),
+                },
+            ),
+        ],
+        stopwatch: Stopwatch::new(),
+    });
+
     let mut transform = Transform::from_translation(
-        (player_pos + normalized_direction_vector * 20.).extend(ZLayer::PlayerWeapon.z_layer()),
+        (player_pos + normalized_direction_vector * 35.).extend(ZLayer::PlayerWeapon.z_layer()),
     );
 
     transform.rotation = Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
 
-    commands.entity(player_weapon.0).insert(Swinging {
-        from: *player_weapon.1,
-        from_easing: EaseFunction::BackIn,
-        from_duration: Duration::from_secs_f32(0.25),
-        to: transform,
-        to_easing: EaseFunction::BackOut,
-        to_duration: Duration::from_secs_f32(0.1),
+    commands.entity(player_weapon.0).insert(Swings {
+        swings: vec![(
+            Duration::ZERO,
+            Swing {
+                from: *player_weapon.1,
+                to: transform,
+                duration: Duration::from_secs_f32(0.25),
+                easing: EaseFunction::BackOut,
+            },
+        )],
         stopwatch: Stopwatch::new(),
     });
 }
@@ -190,24 +211,27 @@ pub(super) fn secondary_attack(
     let normalized_direction_vector = direction_vector.normalize_or_zero();
 
     let axis2d = current_movement.value::<MovePlayer>().unwrap().as_axis2d();
-    let rooted_duration = Duration::from_secs_f32(0.35);
+    let rooted_duration = Duration::from_secs_f32(0.25);
     commands.entity(player_entity).remove::<Moving>().insert((
         Attacking {
             swing_sound: None,
             target: normalized_direction_vector,
-            hitbox_movement: Some(normalized_direction_vector),
+            hitbox_movement: vec![(
+                LinearVelocity(normalized_direction_vector * 80.),
+                AngularVelocity(15.),
+            )],
             spawn_hitbox: vec![Duration::from_secs_f32(0.25)],
             stopwatch: Stopwatch::new(),
             range: 10.,
             hitbox: vec![Collider::circle(3.5)],
-            hitbox_duration: Duration::from_secs_f32(10.),
+            hitbox_duration: vec![Duration::from_secs_f32(10.)],
             marker: Some(AttackMarker::TriggersMark),
             sprite: Some(Sprite {
                 image: sprite_assets.potion.clone_weak(),
                 custom_size: Some(Vec2::new(7., 7.)),
                 ..default()
             }),
-            hitbox_sound: None,
+            hitbox_sound: Vec::new(),
         },
         AttackMovements {
             movements: vec![(
@@ -216,7 +240,7 @@ pub(super) fn secondary_attack(
                     easing: EaseFunction::QuarticOut,
                     speed: 50.,
                     from_to: (axis2d, Vec2::ZERO),
-                    end_timing: rooted_duration,
+                    duration: rooted_duration,
                 },
             )],
             stopwatch: Stopwatch::new(),
@@ -280,39 +304,4 @@ pub(super) fn trigger_mark(
     }
 
     commands.entity(trigger_entity).despawn();
-}
-
-pub(super) fn animate_swing(
-    swing_q: Query<(Entity, &mut Transform, &mut Swinging)>,
-    mut commands: Commands,
-    time: Res<Time<Virtual>>,
-) {
-    let delta = time.delta();
-
-    for (entity, mut transform, mut swinging) in swing_q {
-        swinging.stopwatch.tick(delta);
-        let elapsed = swinging.stopwatch.elapsed();
-        if swinging.from_duration >= swinging.stopwatch.elapsed() {
-            let t = (elapsed.as_secs_f32() / swinging.from_duration.as_secs_f32()).clamp(0., 1.);
-            transform.translation = transform.translation.lerp(
-                swinging.to.translation,
-                swinging.from_easing.sample(t).unwrap(),
-            );
-            transform.rotation = transform.rotation.lerp(
-                swinging.from.rotation,
-                swinging.from_easing.sample(t).unwrap(),
-            );
-        } else if swinging.to_duration >= swinging.stopwatch.elapsed() {
-            let t = (elapsed.as_secs_f32() / swinging.to_duration.as_secs_f32()).clamp(0., 1.);
-            transform.translation = transform.translation.lerp(
-                swinging.from.translation,
-                swinging.to_easing.sample(t).unwrap(),
-            );
-            transform.rotation = transform
-                .rotation
-                .lerp(swinging.to.rotation, swinging.to_easing.sample(t).unwrap());
-        } else {
-            commands.entity(entity).remove::<Swinging>();
-        }
-    }
 }

@@ -7,13 +7,13 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 
 use bevy_enhanced_input::prelude::*;
 
+use crate::movement::Moving;
 use crate::{
-    AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, Moving,
+    AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame,
     SpriteAssets, ZLayer,
     player::{
         combat::{
-            animate_swing, apply_mark, primary_attack, secondary_attack, trigger_mark,
-            triggers_mark_collision,
+            apply_mark, primary_attack, secondary_attack, trigger_mark, triggers_mark_collision,
         },
         input::{binding, update_joystick, update_looking_direction},
         movement::{LookingDirection, apply_velocity, stop_velocity, weapon_follow},
@@ -26,7 +26,7 @@ pub(super) use crate::player::combat::TriggersMark;
 pub(super) use crate::player::input::JoystickID;
 
 #[cfg(debug_assertions)]
-use crate::player::combat::{Mark, Swinging};
+use crate::player::combat::Mark;
 
 pub(super) struct PlayerPlugin;
 
@@ -45,7 +45,6 @@ impl Plugin for PlayerPlugin {
                 (
                     triggers_mark_collision,
                     weapon_follow,
-                    animate_swing,
                     update_looking_direction.run_if(in_state(CursorState::Mouse)),
                     update_joystick.run_if(in_state(CursorState::Touch)),
                 )
@@ -55,7 +54,6 @@ impl Plugin for PlayerPlugin {
         #[cfg(debug_assertions)]
         app.register_type::<Player>()
             .register_type::<Mark>()
-            .register_type::<Swinging>()
             .register_type::<LookingDirection>();
     }
 }

@@ -3,9 +3,11 @@ use bevy::prelude::*;
 
 use bevy_enhanced_input::prelude::*;
 
+use crate::movement::Moving;
 use crate::{
-    Moving, ZLayer,
-    player::{Player, WeaponSprite, combat::Swinging, input::MovePlayer},
+    ZLayer,
+    combat::Swings,
+    player::{Player, WeaponSprite, input::MovePlayer},
 };
 
 #[derive(Component, Reflect, Default, Deref, DerefMut)]
@@ -27,7 +29,7 @@ pub(super) fn stop_velocity(
 
 pub(super) fn weapon_follow(
     player: Single<(&Transform, &LookingDirection), With<Player>>,
-    mut weapon: Single<&mut Transform, (With<WeaponSprite>, (Without<Player>, Without<Swinging>))>,
+    mut weapon: Single<&mut Transform, (With<WeaponSprite>, (Without<Player>, Without<Swings>))>,
     time: Res<Time<Virtual>>,
 ) {
     let target =
@@ -44,5 +46,5 @@ pub(super) fn weapon_follow(
     );
     weapon
         .rotation
-        .smooth_nudge(&target_rotation, 10., time.delta_secs());
+        .smooth_nudge(&target_rotation, 20., time.delta_secs());
 }
