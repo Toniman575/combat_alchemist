@@ -146,6 +146,7 @@ pub(super) fn primary_attack(
             marker: Some(AttackMarker::AppliesMark),
             sprite: None,
             hitbox_sound: vec![audio_assets.staff_impact.clone_weak()],
+            swings: None,
         },
         Rooted {
             duration: rooted_duration,
@@ -161,14 +162,14 @@ pub(super) fn primary_attack(
                     easing: EaseFunction::QuarticOut,
                     speed: 600.,
                     from_to: (-normalized_direction_vector, Vec2::ZERO),
-                    duration: Duration::from_secs_f32(0.8),
+                    duration: Duration::from_secs_f32(1.2),
                 },
             ),
             (
                 Duration::ZERO,
                 AttackMovement {
                     easing: EaseFunction::QuarticOut,
-                    speed: 300.,
+                    speed: 500.,
                     from_to: (normalized_direction_vector, Vec2::ZERO),
                     duration: Duration::from_secs_f32(0.27),
                 },
@@ -178,7 +179,7 @@ pub(super) fn primary_attack(
     });
 
     let mut transform = Transform::from_translation(
-        (player_pos + normalized_direction_vector * 35.).extend(ZLayer::PlayerWeapon.z_layer()),
+        (player_pos + normalized_direction_vector * 40.).extend(ZLayer::PlayerWeapon.z_layer()),
     );
 
     transform.rotation = Quat::from_rotation_arc(Vec3::Y, normalized_direction_vector.extend(0.));
@@ -232,6 +233,7 @@ pub(super) fn secondary_attack(
                 ..default()
             }),
             hitbox_sound: Vec::new(),
+            swings: None,
         },
         AttackMovements {
             movements: vec![(

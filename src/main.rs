@@ -38,6 +38,9 @@ use crate::{
     combat::{AttackHitBoxTimer, Swings},
 };
 
+#[derive(Component, Reflect)]
+struct GameOverScreen;
+
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 enum AssetState {
     Loaded,
@@ -47,6 +50,7 @@ enum AssetState {
 
 #[derive(SubStates, Clone, PartialEq, Eq, Hash, Debug, Default)]
 #[source(AssetState = AssetState::Loaded)]
+#[states(scoped_entities)]
 enum GameState {
     Paused,
     #[default]

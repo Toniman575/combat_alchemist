@@ -7,10 +7,10 @@ use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor};
 
 use bevy_enhanced_input::prelude::*;
 
+use crate::AssetState;
 use crate::movement::Moving;
 use crate::{
-    AssetState, CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame,
-    SpriteAssets, ZLayer,
+    CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, SpriteAssets, ZLayer,
     player::{
         combat::{
             apply_mark, primary_attack, secondary_attack, trigger_mark, triggers_mark_collision,
@@ -121,5 +121,5 @@ fn startup(
         Transform::from_xyz(0., 0., ZLayer::PlayerWeapon.z_layer()),
         WeaponSprite,
     ));
-    commands.spawn(Player::bundle(50., sprite_assets, meshes, materials));
+    commands.spawn((Player::bundle(50., sprite_assets, meshes, materials),));
 }

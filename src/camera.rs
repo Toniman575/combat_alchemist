@@ -33,7 +33,7 @@ fn zoom(trigger: Trigger<Fired<Zoom>>, proj: Single<&mut Projection>, mut egui_c
     if !egui_ctx.ctx_mut().wants_pointer_input()
         && let Projection::Orthographic(proj) = proj.into_inner().into_inner()
     {
-        proj.scale -= trigger.value.y.signum() * 0.025
+        proj.scale = (proj.scale - trigger.value.y.signum() * 0.025).clamp(0.1, 0.6)
     }
 }
 

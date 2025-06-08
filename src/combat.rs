@@ -25,6 +25,7 @@ pub(super) struct Attacking {
     pub(super) stopwatch: Stopwatch,
     pub(super) swing_sound: Option<(Duration, Handle<Sample>)>,
     pub(super) target: Vec2,
+    pub(super) swings: Option<Swings>,
 }
 
 #[derive(Component, Reflect)]
@@ -40,13 +41,13 @@ pub(super) struct AttackMovement {
     pub(super) from_to: (Vec2, Vec2),
     pub(super) speed: f32,
 }
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Clone)]
 pub(super) struct Swings {
     pub(super) swings: Vec<(Duration, Swing)>,
     pub(super) stopwatch: Stopwatch,
 }
 
-#[derive(Reflect)]
+#[derive(Reflect, Clone)]
 pub(super) struct Swing {
     pub(super) from: Transform,
     pub(super) to: Transform,
@@ -141,6 +142,10 @@ pub(super) fn tick_attack_timer(
                 child_entity_commands.insert(sprite.clone());
             }
 
+            if let Some(swings) = &attacking.swings {
+                child_entity_commands.insert(swings.clone());
+            }
+
             if let Some(marker) = &attacking.marker {
                 match marker {
                     AttackMarker::AppliesMark => child_entity_commands.insert(AppliesMark),
@@ -230,6 +235,11 @@ pub(super) fn animate_swing(
                 .from
                 .translation
                 .lerp(swing.to.translation, swing.easing.sample(t).unwrap());
+
+            transform.scale = swing
+                .from
+                .scale
+                .lerp(swing.to.scale, swing.easing.sample(t).unwrap());
         } else {
             swinging.swings.pop();
         }

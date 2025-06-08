@@ -3,13 +3,17 @@ use std::time::Duration;
 use avian2d::prelude::*;
 use bevy::{color::palettes::css::RED, prelude::*, sprite::Anchor, time::Stopwatch};
 use bevy_seedling::{prelude::Volume, sample::SamplePlayer};
+use rand::Rng;
 
+use crate::AssetState;
+use crate::combat::Swings;
 use crate::combat::AttackMovement;
 use crate::combat::Attacking;
+use crate::combat::Swing;
 use crate::movement::Moving;
 use crate::{
-    AssetState, AttackMovements, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar,
-    Rooted, SpriteAssets, ZLayer, player::Player,
+    AttackMovements, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar, Rooted,
+    SpriteAssets, ZLayer, player::Player,
 };
 
 pub(super) struct EnemyPlugin;
@@ -46,14 +50,14 @@ pub struct Enemy {
 
 impl Enemy {
     fn bundle(
+        translation: Vec3,
         speed: f32,
         health: i16,
         collider_size: f32,
         name: String,
-        pos: Vec2,
-        sprite_assets: Res<SpriteAssets>,
-        mut meshes: ResMut<'_, Assets<Mesh>>,
-        mut materials: ResMut<'_, Assets<ColorMaterial>>,
+        sprite_handle: Handle<Image>,
+        mesh: Mesh2d,
+        color_handle: Handle<ColorMaterial>,
     ) -> impl Bundle {
         (
             Self { speed },
@@ -62,7 +66,7 @@ impl Enemy {
                 max: health,
             },
             Sprite {
-                image: sprite_assets.enemy.clone_weak(),
+                image: sprite_handle.clone_weak(),
                 anchor: Anchor::Custom(Vec2::new(0., -0.1)),
                 custom_size: Some(Vec2::new(20., 20.)),
                 ..default()
@@ -77,10 +81,10 @@ impl Enemy {
             ),
             Collider::circle(collider_size),
             Name::new(name),
-            Transform::from_translation(pos.extend(ZLayer::Enemies.z_layer())),
+            Transform::from_translation(translation),
             children![(
-                Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
-                MeshMaterial2d(materials.add(Color::from(RED))),
+                mesh,
+                MeshMaterial2d(color_handle.clone()),
                 Transform::from_translation(Vec3::new(0., 17.5, ZLayer::HealthBar.z_layer())),
                 HealthBar,
                 Name::new("Healthbar"),
@@ -110,19 +114,19 @@ pub(super) struct FollowedBy(Vec<Entity>);
 fn startup(
     mut commands: Commands,
     sprite_assets: Res<SpriteAssets>,
-    meshes: ResMut<'_, Assets<Mesh>>,
-    materials: ResMut<'_, Assets<ColorMaterial>>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<ColorMaterial>>,
 ) {
-    commands.spawn(Enemy::bundle(
+    commands.spawn((Enemy::bundle(
+        Vec3::new(100., 100., ZLayer::Enemies.z_layer()),
         30.,
         30,
         8.,
         String::from("Training Dummy"),
-        Vec2::new(-100., -100.),
-        sprite_assets,
-        meshes,
-        materials,
-    ));
+        sprite_assets.enemy.clone_weak(),
+        Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
+        materials.add(Color::from(RED)),
+    ),));
 }
 
 fn enemy_attack(
@@ -150,7 +154,7 @@ fn move_enemies(
         let normalized_direction_vector =
             (player.translation.xy() - enemy_transform.translation.xy()).normalize_or_zero();
 
-        if enemy_transform.translation.distance(player.translation) < 40. {
+        if enemy_transform.translation.distance(player.translation) < 50. {
             let mut new_transform =
                 Transform::from_translation((normalized_direction_vector * 80.).extend(0.));
             new_transform.rotation =
@@ -170,26 +174,43 @@ fn move_enemies(
                     )),
                     hitbox_movement: Vec::new(),
                     target: normalized_direction_vector,
-                    spawn_hitbox: vec![Duration::from_secs_f32(0.5)],
+                    spawn_hitbox: vec![Duration::from_secs_f32(0.35)],
                     stopwatch: Stopwatch::new(),
-                    range: 25.,
+                    range: 15.,
                     hitbox: vec![Collider::rectangle(15., 15.)],
-                    hitbox_duration: vec![Duration::from_secs_f32(0.1)],
+                    hitbox_duration: vec![Duration::from_secs_f32(0.25)],
                     marker: None,
                     sprite: Some(Sprite {
                         image: sprite_assets.bite.clone_weak(),
                         ..default()
                     }),
                     hitbox_sound: vec![audio_assets.bite_impact.clone_weak()],
+                    swings: Some(Swings {
+                        swings: vec![(
+                            Duration::ZERO,
+                            Swing {
+                                from: Transform::from_translation(
+                                    (normalized_direction_vector * 15.).extend(0.),
+                                ),
+                                to: Transform::from_translation(
+                                    (normalized_direction_vector * 15.).extend(0.),
+                                )
+                                .with_scale(Vec3::new(1., 0.1, 1.)),
+                                duration: Duration::from_secs_f32(0.25),
+                                easing: EaseFunction::BackIn,
+                            },
+                        )],
+                        stopwatch: Stopwatch::new(),
+                    }),
                 },
                 AttackMovements {
                     movements: vec![(
-                        Duration::ZERO,
+                        Duration::from_secs_f32(0.25),
                         AttackMovement {
-                            easing: EaseFunction::CubicOut,
-                            speed: 100.,
+                            easing: EaseFunction::Linear,
+                            speed: 250.,
                             from_to: (normalized_direction_vector, Vec2::ZERO),
-                            duration: Duration::from_secs_f32(0.6),
+                            duration: Duration::from_secs_f32(1.5),
                         },
                     )],
                     stopwatch: Stopwatch::new(),
@@ -213,20 +234,29 @@ fn spawn_enemies(
     mut timer: ResMut<SpawnTimer>,
     time: Res<Time<Virtual>>,
     sprite_assets: Res<SpriteAssets>,
-    meshes: ResMut<'_, Assets<Mesh>>,
-    materials: ResMut<'_, Assets<ColorMaterial>>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<ColorMaterial>>,
+    player: Single<&Transform, With<Player>>,
 ) {
     if timer.tick(time.delta()).finished() {
-        commands.spawn(Enemy::bundle(
-            30.,
-            30,
-            8.,
-            String::from("Training Dummy"),
-            Vec2::new(-100., -100.),
-            sprite_assets,
-            meshes,
-            materials,
-        ));
+        let mut rng = rand::rng();
+
+        for _ in 1..=rng.random_range(2..5) {
+            commands.spawn((Enemy::bundle(
+                Vec3::new(
+                    rng.random_range((player.translation.x - 500.)..(player.translation.x + 500.)),
+                    rng.random_range((player.translation.y - 500.)..(player.translation.y + 500.)),
+                    ZLayer::Enemies.z_layer(),
+                ),
+                30.,
+                30,
+                8.,
+                String::from("Training Dummy"),
+                sprite_assets.enemy.clone_weak(),
+                Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
+                materials.add(Color::from(RED)),
+            ),));
+        }
     }
 }
 
