@@ -1,16 +1,17 @@
 use std::time::Duration;
 
 use avian2d::prelude::*;
-use bevy::{platform::collections::HashSet, prelude::*, time::Stopwatch};
+use bevy::{prelude::*, time::Stopwatch};
 use bevy_enhanced_input::prelude::*;
 use bevy_enoki::{ParticleEffectHandle, ParticleSpawner, prelude::OneShot};
 use bevy_seedling::sample::SamplePlayer;
 
+use crate::Health;
 use crate::combat::{Attacking, Swing, Swings};
 use crate::player::Moving;
 use crate::{
-    AttackMovements, AudioAssets, GameCollisionLayer, Health, InGame, ParticleAssets, Rooted,
-    SpriteAssets, ZLayer,
+    AttackMovements, AudioAssets, GameCollisionLayer, InGame, ParticleAssets, Rooted, SpriteAssets,
+    ZLayer,
     combat::AttackMovement,
     enemy::{Enemy, FollowedBy, Following},
     player::{
@@ -21,6 +22,9 @@ use crate::{
 
 #[derive(Component, Reflect)]
 pub(super) struct Mark;
+
+#[derive(Component, Reflect)]
+pub(super) struct MarkTriggered;
 
 #[derive(Component, Reflect, Copy, Clone)]
 pub struct AppliesMark;
@@ -34,7 +38,7 @@ pub enum AttackMarker {
 }
 
 #[derive(Event)]
-pub struct TriggerMark(HashSet<Entity>);
+pub struct TriggerMark;
 
 pub(super) fn apply_mark(
     trigger: Trigger<OnCollisionStart>,
@@ -68,14 +72,14 @@ pub(super) fn apply_mark(
         ParticleSpawner::default(),
         ParticleEffectHandle(effect_assets.apply_mark.clone_weak()),
         OneShot::Despawn,
-        Transform::from_translation(contact_point.extend(10.)),
+        Transform::from_translation(contact_point.extend(ZLayer::Effects.z_layer())),
     ));
 
     commands.spawn((
         Collider::circle(50.),
         Sensor,
         GameCollisionLayer::mark(),
-        Transform::from_xyz(0., 0., 10.),
+        Transform::from_xyz(0., 0., ZLayer::Effects.z_layer()),
         Following::new(enemy_entity),
         Pickable::IGNORE,
         CollidingEntities::default(),
@@ -87,7 +91,7 @@ pub(super) fn apply_mark(
 pub(super) fn triggers_mark_collision(
     mut commands: Commands,
     colliding_q: Query<(Entity, &mut CollidingEntities), With<TriggersMark>>,
-    enemy_q: Query<Option<&FollowedBy>, With<Enemy>>,
+    enemy_q: Query<Has<Mark>, With<Enemy>>,
     audio_assets: Res<AudioAssets>,
 ) {
     for (entity, mut colliding_entites) in colliding_q {
@@ -96,20 +100,15 @@ pub(super) fn triggers_mark_collision(
         }
 
         for colliding_entity in colliding_entites.drain() {
-            let Ok(followed_by) = enemy_q.get(colliding_entity) else {
+            let Ok(has_mark) = enemy_q.get(colliding_entity) else {
                 continue;
             };
 
-            if let Some(followed_by) = followed_by {
-                for following_entity in followed_by.iter() {
-                    let mut entities = HashSet::new();
-                    entities.insert(following_entity);
-                    commands
-                        .entity(following_entity)
-                        .trigger(TriggerMark(entities));
-                    commands.entity(entity).despawn();
-                    commands.spawn(SamplePlayer::new(audio_assets.mark_triggered.clone_weak()));
-                }
+            if has_mark {
+                commands.entity(colliding_entity).trigger(TriggerMark);
+                commands.entity(entity).despawn();
+                commands.spawn(SamplePlayer::new(audio_assets.mark_triggered.clone_weak()));
+
                 return;
             }
         }
@@ -256,54 +255,74 @@ pub(super) fn secondary_attack(
 
 pub(super) fn trigger_mark(
     trigger: Trigger<TriggerMark>,
-    mut colliding_entities: Query<&mut CollidingEntities>,
-    colliders: Query<(Entity, &Following), With<Sensor>>,
-    mut query_mark: Query<(&Transform, &mut Health), With<Mark>>,
+    mut collider_q: Query<&mut CollidingEntities, With<Sensor>>,
+    mut enemy_q: Query<(Entity, &FollowedBy), With<Mark>>,
     mut commands: Commands,
-    effect_assets: Res<ParticleAssets>,
 ) {
-    let trigger_entity = trigger.target();
-    if commands.get_entity(trigger_entity).is_err() {
-        return;
-    }
+    let triggered_enemy = trigger.target();
+    let (enemy_entity, followed_by) = enemy_q.get_mut(triggered_enemy).unwrap();
 
-    let Ok(collider) = colliders.get(trigger_entity) else {
-        return;
-    };
-    let trigger_entity_following = collider.1.following();
-    let Ok(mut binding) = colliding_entities.get_mut(trigger_entity) else {
-        return;
-    };
-    let mut already_triggered_entities = trigger.0.clone();
-    let mut entities_being_triggered_now = binding.clone();
-    already_triggered_entities.extend(entities_being_triggered_now.drain());
+    let colliding_entites = collider_q
+        .get_mut(followed_by.iter().last().unwrap())
+        .unwrap();
 
-    for colliding_entity in binding.drain() {
-        if trigger.0.contains(&colliding_entity) {
-            continue;
-        }
-
-        let Ok((collider_entity, _)) = colliders.get(colliding_entity) else {
+    for entity in &colliding_entites.0 {
+        let Ok((enemy_entity, _)) = enemy_q.get(*entity) else {
             continue;
         };
 
-        commands
-            .entity(collider_entity)
-            .trigger(TriggerMark(already_triggered_entities.clone()));
+        let mut entity_commands = commands.entity(enemy_entity);
+        entity_commands.remove::<Mark>();
+        entity_commands.insert(MarkTriggered);
     }
 
-    commands.entity(trigger_entity_following).remove::<Mark>();
-    if let Ok((transform, mut health)) = query_mark.get_mut(trigger_entity_following) {
+    let mut entity_commands = commands.entity(enemy_entity);
+
+    entity_commands.remove::<Mark>();
+    entity_commands.insert(MarkTriggered);
+}
+
+pub(super) fn mark_triggered(
+    mut commands: Commands,
+    triggered_q: Query<(Entity, &Transform, &FollowedBy), With<MarkTriggered>>,
+    mut colliding_entities: Query<&mut CollidingEntities>,
+    mut health_q: Query<(&mut Health, Has<Mark>), With<Enemy>>,
+    effect_assets: Res<ParticleAssets>,
+) {
+    for (entity, transform, followed_by) in triggered_q {
+        for following_entity in followed_by.iter() {
+            let mut colliding_entities = colliding_entities.get_mut(following_entity).unwrap();
+
+            for colliding_entity in colliding_entities.drain() {
+                let (mut health, has_mark) = health_q.get_mut(colliding_entity).unwrap();
+                health.current -= 5;
+
+                if has_mark {
+                    let mut entity_commands = commands.entity(colliding_entity);
+                    entity_commands.remove::<Mark>();
+                    entity_commands.insert(MarkTriggered);
+                }
+            }
+        }
+        let (mut health, _) = health_q.get_mut(entity).unwrap();
         health.current -= 10;
-        let particle_transform =
-            Transform::from_translation(transform.translation.truncate().extend(10.));
+        commands.entity(entity).remove::<MarkTriggered>();
+
+        let particle_transform = Transform::from_translation(
+            transform
+                .translation
+                .truncate()
+                .extend(ZLayer::Effects.z_layer()),
+        );
         commands.spawn((
             ParticleSpawner::default(),
             ParticleEffectHandle(effect_assets.trigger.clone_weak()),
             OneShot::Despawn,
             particle_transform,
         ));
-    }
 
-    commands.entity(trigger_entity).despawn();
+        for following_entity in followed_by.iter() {
+            commands.entity(following_entity).despawn();
+        }
+    }
 }

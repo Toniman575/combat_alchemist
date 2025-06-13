@@ -66,6 +66,7 @@ enum CursorState {
 }
 
 enum ZLayer {
+    Effects,
     Enemies,
     EnemyWeapon,
     HealthBar,
@@ -77,6 +78,7 @@ enum ZLayer {
 impl ZLayer {
     fn z_layer(&self) -> f32 {
         match self {
+            ZLayer::Effects => 10.,
             ZLayer::Enemies => 2.,
             ZLayer::EnemyWeapon => 1.,
             ZLayer::HealthBar => 1.,
@@ -111,7 +113,7 @@ impl GameCollisionLayer {
     }
 
     fn mark() -> CollisionLayers {
-        CollisionLayers::new(GameCollisionLayer::Mark, GameCollisionLayer::Mark)
+        CollisionLayers::new(GameCollisionLayer::Mark, GameCollisionLayer::Enemy)
     }
 
     fn player_attack() -> CollisionLayers {

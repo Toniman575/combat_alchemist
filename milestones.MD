@@ -18,7 +18,7 @@
 
 ### Milestone 3
 
-    - [ ] Iterate on basic combat loop to make it feel good.
+    - [x] Iterate on basic combat loop to make it feel good.
     - [ ] Add more "Markers" and "Release" Mechanics
     - [ ] Add more Enemy Types
     - [ ] Add some kind of Progression other than new enemies spawning

@@ -9,6 +9,7 @@ use bevy_enhanced_input::prelude::*;
 
 use crate::AssetState;
 use crate::movement::Moving;
+use crate::player::combat::mark_triggered;
 use crate::{
     CursorState, GameCollisionLayer, GameState, Health, HealthBar, InGame, SpriteAssets, ZLayer,
     player::{
@@ -45,6 +46,7 @@ impl Plugin for PlayerPlugin {
                 (
                     triggers_mark_collision,
                     weapon_follow,
+                    mark_triggered,
                     update_looking_direction.run_if(in_state(CursorState::Mouse)),
                     update_joystick.run_if(in_state(CursorState::Touch)),
                 )

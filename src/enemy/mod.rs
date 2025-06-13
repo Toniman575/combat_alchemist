@@ -6,10 +6,10 @@ use bevy_seedling::{prelude::Volume, sample::SamplePlayer};
 use rand::Rng;
 
 use crate::AssetState;
-use crate::combat::Swings;
 use crate::combat::AttackMovement;
 use crate::combat::Attacking;
 use crate::combat::Swing;
+use crate::combat::Swings;
 use crate::movement::Moving;
 use crate::{
     AttackMovements, AudioAssets, GameCollisionLayer, GameState, Health, HealthBar, Rooted,
@@ -29,7 +29,9 @@ impl Plugin for EnemyPlugin {
             .insert_resource(SpawnTimer(Timer::from_seconds(10., TimerMode::Repeating)));
 
         #[cfg(debug_assertions)]
-        app.register_type::<Enemy>();
+        app.register_type::<Enemy>()
+            .register_type::<FollowedBy>()
+            .register_type::<Following>();
     }
 }
 
@@ -77,6 +79,7 @@ impl Enemy {
                     GameCollisionLayer::Enemy,
                     GameCollisionLayer::Player,
                     GameCollisionLayer::PlayerAttack,
+                    GameCollisionLayer::Mark,
                 ]],
             ),
             Collider::circle(collider_size),
@@ -94,7 +97,7 @@ impl Enemy {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Reflect)]
 #[relationship(relationship_target = FollowedBy)]
 pub(super) struct Following(Entity);
 
@@ -107,7 +110,7 @@ impl Following {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Reflect)]
 #[relationship_target(relationship = Following)]
 pub(super) struct FollowedBy(Vec<Entity>);
 
@@ -117,7 +120,7 @@ fn startup(
     mut meshes: ResMut<'_, Assets<Mesh>>,
     mut materials: ResMut<'_, Assets<ColorMaterial>>,
 ) {
-    commands.spawn((Enemy::bundle(
+    commands.spawn(Enemy::bundle(
         Vec3::new(100., 100., ZLayer::Enemies.z_layer()),
         30.,
         30,
@@ -126,7 +129,7 @@ fn startup(
         sprite_assets.enemy.clone_weak(),
         Mesh2d(meshes.add(Rectangle::new(25., 2.5))),
         materials.add(Color::from(RED)),
-    ),));
+    ));
 }
 
 fn enemy_attack(
